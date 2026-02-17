@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVEREIGN OS — Unified Control Plane</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #060608;
+  --bg2:     #0d0d12;
+  --bg3:     #12121a;
+  --border:  #1a1a28;
+  --border2: #242438;
+  --green:   #00ff88;
+  --cyan:    #00d4ff;
+  --purple:  #a855f7;
+  --yellow:  #fbbf24;
+  --red:     #ff3366;
+  --orange:  #ff6b35;
+  --text:    #e2e8f0;
+  --text2:   #94a3b8;
+  --text3:   #475569;
+  --mono:    'Space Mono', monospace;
+  --ui:      'Syne', sans-serif;
+  --glow-g:  0 0 20px rgba(0,255,136,0.3);
+  --glow-c:  0 0 20px rgba(0,212,255,0.3);
+  --glow-p:  0 0 20px rgba(168,85,247,0.3);
+  --glow-r:  0 0 20px rgba(255,51,102,0.3);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{height:100%;}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--ui);min-height:100vh;
+  overflow-x:hidden;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0,212,255,0.03), transparent),
+    radial-gradient(ellipse 60% 80% at 80% 80%, rgba(168,85,247,0.03), transparent),
+    repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.005) 40px, rgba(255,255,255,0.005) 41px),
+    repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.005) 40px, rgba(255,255,255,0.005) 41px);
+}
+
+/* ── TOP NAV ── */
+#topnav{
+  position:fixed;top:0;left:0;right:0;height:52px;z-index:200;
+  background:rgba(6,6,8,0.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;padding:0 20px;gap:0;
+}
+.nav-logo{
+  font-family:var(--mono);font-size:13px;font-weight:700;
+  color:var(--cyan);letter-spacing:2px;margin-right:24px;
+  white-space:nowrap;text-shadow:var(--glow-c);
+}
+.nav-tabs{display:flex;gap:0;flex:1;}
+.nav-tab{
+  padding:8px 16px;font-size:11px;font-weight:600;
+  letter-spacing:.5px;text-transform:uppercase;cursor:pointer;
+  color:var(--text3);border-bottom:2px solid transparent;
+  transition:all .2s;border:none;background:none;font-family:var(--ui);
+  white-space:nowrap;
+}
+.nav-tab:hover{color:var(--text2);}
+.nav-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+.nav-identity{
+  margin-left:auto;display:flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:10px;
+}
+.id-chip{
+  padding:4px 10px;border:1px solid var(--border2);border-radius:3px;
+  color:var(--text3);cursor:pointer;transition:.2s;
+}
+.id-chip.live{border-color:var(--green);color:var(--green);box-shadow:var(--glow-g);}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.status-dot.live{background:var(--green);box-shadow:0 0 8px rgba(0,255,136,0.6);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── LAYOUT ── */
+.app-wrap{padding-top:52px;min-height:100vh;}
+.tab-content{display:none;padding:24px 20px 60px;}
+.tab-content.active{display:block;}
+
+/* ── PANELS ── */
+.panel{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:20px;margin-bottom:16px;
+  position:relative;overflow:hidden;
+}
+.panel::before{
+  content:'';position:absolute;top:0;left:0;
+  width:3px;height:100%;
+  background:linear-gradient(180deg,var(--c,var(--border2)),transparent);
+}
+.panel.c{--c:var(--cyan);}
+.panel.g{--c:var(--green);}
+.panel.p{--c:var(--purple);}
+.panel.y{--c:var(--yellow);}
+.panel.r{--c:var(--red);}
+.panel.o{--c:var(--orange);}
+
+.panel-title{
+  font-size:12px;font-weight:600;letter-spacing:1px;
+  text-transform:uppercase;color:var(--c,var(--text2));
+  margin-bottom:14px;display:flex;align-items:center;gap:8px;
+}
+.panel-sub{font-size:9px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;}
+
+/* ── GRID LAYOUTS ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.grid-auto{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+@media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+/* ── FORMS ── */
+input,textarea,select{
+  background:var(--bg);border:1px solid var(--border2);color:var(--text);
+  font-family:var(--mono);font-size:11px;padding:8px 12px;
+  border-radius:4px;width:100%;outline:none;transition:border-color .2s;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(0,212,255,0.1);}
+label{font-size:9px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px;}
+.field{margin-bottom:12px;}
+.row{display:flex;gap:10px;flex-wrap:wrap;}
+.row .field{flex:1;min-width:180px;}
+
+/* ── BUTTONS ── */
+.btn{
+  font-family:var(--ui);font-size:11px;font-weight:600;
+  padding:8px 16px;border-radius:4px;border:1px solid var(--border2);
+  background:transparent;color:var(--text);cursor:pointer;transition:all .2s;
+  letter-spacing:.5px;text-transform:uppercase;
+}
+.btn:hover{background:rgba(255,255,255,0.04);}
+.btn.c{border-color:var(--cyan);color:var(--cyan);}
+.btn.c:hover{background:rgba(0,212,255,0.08);box-shadow:var(--glow-c);}
+.btn.g{border-color:var(--green);color:var(--green);}
+.btn.g:hover{background:rgba(0,255,136,0.08);box-shadow:var(--glow-g);}
+.btn.p{border-color:var(--purple);color:var(--purple);}
+.btn.p:hover{background:rgba(168,85,247,0.08);box-shadow:var(--glow-p);}
+.btn.r{border-color:var(--red);color:var(--red);}
+.btn.r:hover{background:rgba(255,51,102,0.08);box-shadow:var(--glow-r);}
+.btn.big{padding:12px 28px;font-size:12px;width:100%;}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ── ENTROPY RING ── */
+.entropy-ring{
+  width:180px;height:180px;border-radius:50%;
+  border:2px solid var(--border2);position:relative;
+  margin:0 auto 20px;display:flex;align-items:center;
+  justify-content:center;flex-direction:column;
+  background:radial-gradient(circle,rgba(0,212,255,0.04),transparent 70%);
+}
+.entropy-ring::after{
+  content:'';position:absolute;inset:-3px;border-radius:50%;
+  background:conic-gradient(var(--cyan) var(--ep,0%), var(--border) var(--ep,0%));
+  mask:radial-gradient(farthest-side, transparent calc(100% - 3px), black calc(100% - 3px));
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 3px), black calc(100% - 3px));
+  transition:--ep .3s;
+}
+.entropy-val{font-family:var(--mono);font-size:13px;color:var(--cyan);}
+.entropy-lbl{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-top:2px;}
+
+/* ── SPONGE GRID ── */
+.sponge-grid{
+  display:grid;grid-template-columns:repeat(25,1fr);gap:1px;
+  padding:10px;background:var(--bg3);border-radius:6px;
+  border:1px solid var(--border2);
+}
+.sc{width:100%;aspect-ratio:1;border-radius:1px;transition:background .1s;}
+
+/* ── STEP INDICATOR ── */
+.steps{display:flex;justify-content:center;gap:0;margin-bottom:28px;flex-wrap:wrap;}
+.step{
+  padding:6px 16px;font-size:9px;font-weight:600;
+  letter-spacing:.8px;text-transform:uppercase;
+  border:1px solid var(--border2);color:var(--text3);transition:.2s;
+}
+.step:first-child{border-radius:4px 0 0 4px;}
+.step:last-child{border-radius:0 4px 4px 0;}
+.step:not(:first-child){border-left:none;}
+.step.active{border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,0.07);}
+.step.done{border-color:var(--green);color:var(--green);background:rgba(0,255,136,0.05);}
+
+/* ── DID CARD ── */
+.did-card{
+  background:linear-gradient(135deg,rgba(0,212,255,0.04),rgba(168,85,247,0.04));
+  border:1px solid rgba(168,85,247,0.25);border-radius:10px;padding:20px;
+  text-align:center;margin-bottom:16px;position:relative;overflow:hidden;
+}
+.did-card::before{
+  content:'⬡';position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  font-size:60px;opacity:.04;color:var(--cyan);pointer-events:none;
+}
+.did-username{font-size:22px;font-weight:800;color:var(--purple);margin-bottom:4px;}
+.did-str{font-family:var(--mono);font-size:10px;color:var(--cyan);word-break:break-all;}
+.did-meta{font-size:9px;color:var(--green);margin-top:6px;}
+
+/* ── SHARE GRID ── */
+.share-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+.share-card{
+  background:var(--bg);border:1px solid var(--border2);border-radius:6px;
+  padding:10px;text-align:center;cursor:pointer;transition:.2s;
+}
+.share-card:hover{border-color:var(--cyan);}
+.share-card.copied{border-color:var(--green);}
+.share-num{font-size:8px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}
+.share-hex{font-family:var(--mono);font-size:7px;color:var(--cyan);word-break:break-all;line-height:1.6;}
+
+/* ── LOG ── */
+.log{
+  height:100px;overflow-y:auto;font-family:var(--mono);font-size:9px;
+  line-height:1.7;background:var(--bg);border:1px solid var(--border);
+  border-radius:4px;padding:8px;
+}
+.ll{padding:1px 0;}
+.ll.ok{color:var(--green);}
+.ll.info{color:var(--cyan);}
+.ll.warn{color:var(--yellow);}
+.ll.err{color:var(--red);}
+.ll.dim{color:var(--text3);}
+
+/* ── PEER CHIPS ── */
+.peer-chip{
+  font-family:var(--mono);font-size:9px;padding:3px 8px;
+  border:1px solid var(--border2);border-radius:3px;color:var(--text3);transition:.2s;
+}
+.peer-chip.live{border-color:var(--green);color:var(--green);}
+
+/* ── AI BUBBLE ── */
+.ai-bubble{
+  background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.2);
+  border-radius:8px;padding:14px;font-size:11px;line-height:1.75;
+  color:var(--text2);white-space:pre-wrap;min-height:80px;font-family:var(--mono);
+}
+.ai-thinking{color:var(--text3);font-style:italic;animation:pulse 1.2s infinite;}
+
+/* ── ASSET / ATTACK STYLES ── */
+.metric-card{
+  background:var(--bg3);border:1px solid var(--border2);border-radius:8px;
+  padding:16px;text-align:center;position:relative;overflow:hidden;
+}
+.metric-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--mc,var(--border2)),transparent);
+}
+.metric-card.c{--mc:var(--cyan);}
+.metric-card.g{--mc:var(--green);}
+.metric-card.y{--mc:var(--yellow);}
+.metric-card.r{--mc:var(--red);}
+.metric-val{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text);}
+.metric-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-top:4px;}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* ── HASH / MONO TEXT ── */
+.hash{font-family:var(--mono);font-size:9px;color:var(--text3);word-break:break-all;}
+.mono{font-family:var(--mono);}
+
+/* ── CARD ── */
+.card{background:rgba(255,255,255,0.02);border:1px solid var(--border2);border-radius:6px;padding:12px;margin-bottom:8px;}
+
+/* ── BADGE ── */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:3px;
+  font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;
+}
+.badge.g{background:rgba(0,255,136,0.1);color:var(--green);border:1px solid rgba(0,255,136,0.2);}
+.badge.c{background:rgba(0,212,255,0.1);color:var(--cyan);border:1px solid rgba(0,212,255,0.2);}
+.badge.y{background:rgba(251,191,36,0.1);color:var(--yellow);border:1px solid rgba(251,191,36,0.2);}
+.badge.r{background:rgba(255,51,102,0.1);color:var(--red);border:1px solid rgba(255,51,102,0.2);}
+
+/* ── PROGRESS BAR ── */
+.pbar{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;margin-bottom:12px;}
+.pfill{height:100%;background:var(--cyan);border-radius:2px;transition:width .3s;}
+
+/* ── SECTION (within birth tab) ── */
+.sec{display:none;}
+.sec.active{display:block;}
+
+/* ── GOVERNANCE TIMELINE ── */
+.timeline-entry{
+  padding:10px 14px;border-left:2px solid var(--border2);margin-left:8px;
+  position:relative;margin-bottom:8px;
+}
+.timeline-entry::before{
+  content:'';position:absolute;left:-5px;top:14px;
+  width:8px;height:8px;border-radius:50%;background:var(--border2);
+}
+.timeline-entry.ok::before{background:var(--green);}
+.timeline-entry.warn::before{background:var(--yellow);}
+
+/* ── MODAL ── */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.8);
+  display:none;align-items:center;justify-content:center;z-index:300;
+  backdrop-filter:blur(4px);
+}
+.modal-bg.open{display:flex;}
+.modal{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:10px;padding:28px;max-width:480px;width:90%;
+}
+
+/* ── SCROLLBARS ── */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+/* ── HEADER GLYPH ── */
+.sys-header{
+  text-align:center;padding:32px 0 24px;
+}
+.sys-glyph{
+  font-size:40px;margin-bottom:8px;
+  text-shadow:0 0 30px rgba(0,212,255,0.5);
+}
+.sys-title{font-size:26px;font-weight:800;color:var(--cyan);letter-spacing:2px;}
+.sys-sub{font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav id="topnav">
+  <div class="nav-logo">⬡ SOVEREIGN OS</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('birth')">Birth Certificate</button>
+    <button class="nav-tab" onclick="switchTab('identity')">Identity Vault</button>
+    <button class="nav-tab" onclick="switchTab('governance')">Governance</button>
+    <button class="nav-tab" onclick="switchTab('assets')">Asset Valuation</button>
+    <button class="nav-tab" onclick="switchTab('network')">Peer Network</button>
+    <button class="nav-tab" onclick="switchTab('witness')">AI Witness</button>
+    <button class="nav-tab" onclick="switchTab('feed')" id="nav-feed">Feed / Mailbox <span id="inbox-badge" style="display:none;background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;font-size:8px;margin-left:4px;"></span></button>
+  </div>
+  <div class="nav-identity">
+    <div class="status-dot" id="nav-dot"></div>
+    <div class="id-chip" id="nav-id-chip">No Identity</div>
+  </div>
+</nav>
+
+<div class="app-wrap">
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: BIRTH CERTIFICATE
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-birth">
+  <div class="sys-header">
+    <div class="sys-glyph">⬡</div>
+    <div class="sys-title">SOVEREIGN IDENTITY</div>
+    <div class="sys-sub">Birth Certificate Engine · Keccak Entropy · Shamir 3-of-5 · No Oracle</div>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="s-0">Entropy</div>
+    <div class="step" id="s-1">Identity</div>
+    <div class="step" id="s-2">Recovery</div>
+    <div class="step" id="s-3">Confirm</div>
+  </div>
+
+  <!-- SEC 0: ENTROPY -->
+  <div class="sec active" id="sec-0">
+    <div class="panel c">
+      <div class="panel-title">⬡ KeccakBlackBox Engine
+        <span class="panel-sub">Absorb → Permute → Squeeze · sovereign entropy · no oracle</span>
+      </div>
+      <div class="entropy-ring" id="ering">
+        <div class="entropy-val" id="epct">0%</div>
+        <div class="entropy-lbl">Entropy</div>
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label>Active Sources</label>
+        <div style="display:flex;gap:12px;font-size:10px;flex-wrap:wrap;">
+          <span><span class="status-dot" id="d-hw" style="display:inline-block;margin-right:4px;"></span>Hardware CSPRNG</span>
+          <span><span class="status-dot" id="d-tm" style="display:inline-block;margin-right:4px;"></span>Timing</span>
+          <span><span class="status-dot" id="d-ms" style="display:inline-block;margin-right:4px;"></span>Mouse</span>
+          <span><span class="status-dot" id="d-in" style="display:inline-block;margin-right:4px;"></span>Intent</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Intent — seeds the sponge with meaning</label>
+        <input id="intent" type="text" placeholder="a word, phrase, or symbol that is yours…" maxlength="200">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>Keccak Sponge State — 200 bytes, live</label>
+        <div class="sponge-grid" id="sponge"></div>
+      </div>
+      <div class="pbar"><div class="pfill" id="ebar" style="width:0%"></div></div>
+      <div class="log" id="elog" style="margin-bottom:12px;"></div>
+      <div class="btn-row">
+        <button class="btn c" onclick="KeccakEngine.startCollection()">Collect Entropy</button>
+        <button class="btn g big" id="btn-gen" onclick="doGenerateIdentity()" disabled>Generate Identity →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEC 1: IDENTITY -->
+  <div class="sec" id="sec-1">
+    <div class="panel g">
+      <div class="panel-title">⬡ Birth Certificate
+        <span class="panel-sub">Self-sovereign · no gatekeeper · no chain · no permission</span>
+      </div>
+      <div id="cert-display">
+        <div style="text-align:center;padding:30px;color:var(--text3);">Generating…</div>
+      </div>
+    </div>
+    <div class="panel y">
+      <div class="panel-title">⚠ Key is in Memory — Not Yet Saved</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.75;margin-bottom:14px;">
+        Your Ed25519 private key exists only in memory. If you close this tab before
+        completing Recovery, it is gone forever. The next step splits your key into
+        5 shares — any 3 reconstruct you. No single point of failure.
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="birthStep(0)">← Redo Entropy</button>
+        <button class="btn g" onclick="doRecoverySetup()">Create Recovery Shares →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEC 2: SHAMIR RECOVERY -->
+  <div class="sec" id="sec-2">
+    <div class="panel p">
+      <div class="panel-title">⬡ Shamir Secret Sharing — 3 of 5
+        <span class="panel-sub">GF(256) · any 3 of 5 shares reconstruct your key · self-hosted</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:14px;line-height:1.75;">
+        Your key has been split into 5 shares over GF(2⁸). Give each to a different trusted
+        location or person. Any 3 reconstruct your identity. No share reveals anything alone.
+      </div>
+      <div class="share-grid" id="share-display"></div>
+      <div style="margin-top:14px;padding:12px;background:rgba(0,0,0,.3);border-radius:6px;">
+        <div class="field" style="margin-bottom:8px;">
+          <label>Test Recovery — paste any 3 share hexes, comma-separated</label>
+          <textarea id="rec-input" rows="3" placeholder="share hex 1, share hex 2, share hex 3…"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn p" onclick="ShamirRecovery.test()">Test Recovery</button>
+          <div id="rec-result" style="font-size:10px;padding:8px;line-height:1.6;"></div>
+        </div>
+      </div>
+      <div class="log" id="slog" style="margin-top:10px;"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="birthStep(1)">← Back</button>
+      <button class="btn g" id="btn-confirm" onclick="doConfirm()" disabled>Confirm & Finalize →</button>
+    </div>
+  </div>
+
+  <!-- SEC 3: CONFIRM -->
+  <div class="sec" id="sec-3">
+    <div class="panel g" id="final-cert-panel" style="display:none;">
+      <div class="panel-title">⬡ Sovereign Identity — Established</div>
+      <div id="final-cert-content"></div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn g" onclick="exportCert()">Export Certificate JSON</button>
+        <button class="btn c" onclick="switchTab('identity')">→ Open Identity Vault</button>
+        <button class="btn p" onclick="switchTab('witness')">→ Register AI Witness</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: IDENTITY VAULT
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-identity">
+  <div class="panel c">
+    <div class="panel-title">⬡ Identity Vault</div>
+    <div id="vault-display">
+      <div style="color:var(--text3);font-size:11px;padding:20px;text-align:center;">
+        No identity established. Complete the Birth Certificate flow first.
+      </div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel g">
+      <div class="panel-title">⬡ Public Key</div>
+      <div class="field">
+        <label>Ed25519 Public Key (SPKI Hex)</label>
+        <textarea id="vault-pubkey" rows="3" readonly style="font-size:8px;"></textarea>
+      </div>
+    </div>
+    <div class="panel p">
+      <div class="panel-title">⬡ Keccak Lineage</div>
+      <div class="card">
+        <div style="font-size:10px;color:var(--cyan);margin-bottom:4px;">KeccakBlackBox Engine</div>
+        <div class="hash" id="vault-keccak-info">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">⬡ Stored Identities (IDB)</div>
+    <div id="stored-ids">
+      <div style="color:var(--text3);font-size:11px;">Loading…</div>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn c" onclick="loadStoredIdentities()">Refresh</button>
+    </div>
+  </div>
+  <div class="panel y">
+    <div class="panel-title">⬡ Export / Import</div>
+    <div class="btn-row">
+      <button class="btn y" onclick="exportCert()">Export Full Certificate</button>
+      <button class="btn c" onclick="document.getElementById('import-file').click()">Import Certificate</button>
+      <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importCert(this)">
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: GOVERNANCE
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-governance">
+  <div class="grid-3">
+    <div class="metric-card g">
+      <div class="metric-val" id="gov-proposals">0</div>
+      <div class="metric-lbl">Proposals</div>
+    </div>
+    <div class="metric-card c">
+      <div class="metric-val" id="gov-votes">0</div>
+      <div class="metric-lbl">Votes Cast</div>
+    </div>
+    <div class="metric-card y">
+      <div class="metric-val" id="gov-score">—</div>
+      <div class="metric-lbl">Your Score</div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel g">
+      <div class="panel-title">⬡ Submit Proposal</div>
+      <div class="field"><label>Title</label><input id="prop-title" placeholder="e.g. Upgrade entropy threshold to 256 bytes"></div>
+      <div class="field"><label>Description</label><textarea id="prop-desc" rows="3" placeholder="Rationale and implementation notes…"></textarea></div>
+      <div class="field">
+        <label>Type</label>
+        <select id="prop-type">
+          <option>PARAMETER_CHANGE</option>
+          <option>PROTOCOL_UPGRADE</option>
+          <option>REGISTRY_UPDATE</option>
+          <option>EMERGENCY</option>
+        </select>
+      </div>
+      <button class="btn g" onclick="Governance.submit()">Submit Proposal</button>
+    </div>
+    <div class="panel c">
+      <div class="panel-title">⬡ Active Proposals</div>
+      <div id="proposals-list">
+        <div style="color:var(--text3);font-size:11px;">No proposals yet.</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel p">
+    <div class="panel-title">⬡ State Root Chain</div>
+    <div id="state-chain" style="max-height:200px;overflow-y:auto;"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="btn p" onclick="Governance.computeRoot()">Compute State Root</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: ASSET VALUATION
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-assets">
+  <div class="panel o">
+    <div class="panel-title">⬡ Sovereign Asset Registry
+      <span class="panel-sub">Keccak-signed asset records · local valuation engine</span>
+    </div>
+    <div class="row">
+      <div class="field"><label>Asset Name / ID</label><input id="asset-name" placeholder="e.g. KeccakBlackBox Engine v2.0"></div>
+      <div class="field"><label>Type</label>
+        <select id="asset-type">
+          <option>CODE</option><option>DATA</option><option>IDENTITY</option>
+          <option>PROTOCOL</option><option>CONTENT</option><option>CREDENTIAL</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Description</label><input id="asset-desc" placeholder="What is this asset?"></div>
+      <div class="field"><label>Base Value (units)</label><input id="asset-val" type="number" value="1000" min="0"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn o" onclick="Assets.register()">Register Asset</button>
+      <button class="btn c" onclick="Assets.valuate()">Run Valuation</button>
+    </div>
+  </div>
+  <div class="grid-3" id="asset-metrics">
+    <div class="metric-card c">
+      <div class="metric-val" id="am-total">0</div>
+      <div class="metric-lbl">Registered Assets</div>
+    </div>
+    <div class="metric-card g">
+      <div class="metric-val" id="am-value">—</div>
+      <div class="metric-lbl">Total Value</div>
+    </div>
+    <div class="metric-card y">
+      <div class="metric-val" id="am-entropy">—</div>
+      <div class="metric-lbl">Entropy Score</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">⬡ Asset Ledger</div>
+    <div id="asset-ledger">
+      <div style="color:var(--text3);font-size:11px;">No assets registered.</div>
+    </div>
+  </div>
+  <div class="panel c">
+    <div class="panel-title">⬡ Valuation Report</div>
+    <div id="valuation-report" class="hash" style="line-height:1.9;font-size:9px;">
+      Run valuation to generate report.
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: PEER NETWORK
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-network">
+  <div class="panel c">
+    <div class="panel-title">⬡ P2P Mesh — WebRTC
+      <span class="panel-sub">PeerJS · birth certificates broadcast on connect · sovereign mesh</span>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Your Peer ID</label>
+        <input id="my-peer-id" readonly placeholder="Generate identity first…">
+      </div>
+      <div class="field">
+        <label>Connect to Peer</label>
+        <input id="conn-peer-id" placeholder="sovereign-abc123… (get from peer)">
+      </div>
+    </div>
+    <div class="btn-row" style="margin-bottom:14px;">
+      <button class="btn c" onclick="P2PNet.init()">Go Online</button>
+      <button class="btn c" onclick="P2PNet.connect(document.getElementById('conn-peer-id').value)">Connect Peer</button>
+      <button class="btn g" onclick="P2PNet.broadcastBirth()">Broadcast Birth Cert</button>
+    </div>
+    <div class="field">
+      <label>Connected Peers</label>
+      <div id="peer-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;">
+        <span style="font-size:10px;color:var(--text3);">No peers connected</span>
+      </div>
+    </div>
+    <div class="log" id="p2p-log"></div>
+  </div>
+  <div class="panel g">
+    <div class="panel-title">⬡ Peer Registry — Received Birth Certificates</div>
+    <div id="peer-registry">
+      <div style="color:var(--text3);font-size:11px;">No certificates received.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: AI WITNESS
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-witness">
+  <div class="panel p">
+    <div class="panel-title">⬡ AI Witness — Ollama Local
+      <span class="panel-sub">Fully local · no cloud · streams against your Ollama instance</span>
+    </div>
+    <div style="background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:12px;margin-bottom:14px;">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="field" style="flex:2;min-width:200px;margin:0;">
+          <label>Ollama URL</label>
+          <input id="ollama-url" value="http://localhost:11434">
+        </div>
+        <div class="field" style="flex:1;min-width:130px;margin:0;">
+          <label>Model</label>
+          <select id="ollama-model">
+            <option value="llama3.2">llama3.2</option>
+            <option value="llama3.1">llama3.1</option>
+            <option value="mistral">mistral</option>
+            <option value="mistral-nemo">mistral-nemo</option>
+            <option value="phi4">phi4</option>
+            <option value="gemma3">gemma3</option>
+            <option value="qwen2.5">qwen2.5</option>
+            <option value="deepseek-r1">deepseek-r1</option>
+            <option value="custom">custom…</option>
+          </select>
+        </div>
+        <div class="field" id="custom-model-wrap" style="flex:1;min-width:130px;margin:0;display:none;">
+          <label>Custom Model</label>
+          <input id="ollama-model-custom" placeholder="llama3.2:1b">
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;padding-bottom:1px;">
+          <button class="btn c" onclick="AIWitness.testConn()">Test</button>
+          <span id="ollama-status" style="font-size:9px;color:var(--text3);">—</span>
+        </div>
+      </div>
+      <div id="ollama-models" style="margin-top:6px;font-size:9px;color:var(--text3);"></div>
+    </div>
+    <div id="witness-card" class="card" style="margin-bottom:14px;text-align:center;padding:16px;">
+      <div style="color:var(--text3);font-size:11px;">Register identity first, then activate witness.</div>
+    </div>
+    <button class="btn p" style="width:100%;margin-bottom:12px;" onclick="AIWitness.register()">Activate Witness</button>
+    <div class="field">
+      <label>Speak to Witness</label>
+      <div style="display:flex;gap:8px;">
+        <input id="ai-prompt" placeholder="Ask anything…" style="flex:1;"
+          onkeydown="if(event.key==='Enter')AIWitness.ask()">
+        <button class="btn p" onclick="AIWitness.ask()">Send</button>
+      </div>
+    </div>
+    <div class="ai-bubble" id="ai-response">
+      <span class="ai-thinking">Witness dormant — activate after generating identity.</span>
+    </div>
+    <div style="margin-top:8px;font-size:9px;color:var(--text3);">
+      ⬡ Required: <code style="color:var(--cyan);">OLLAMA_ORIGINS="*" ollama serve</code>
+    </div>
+    <div class="log" id="ai-log" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: FEED / MAILBOX
+═══════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-feed">
+
+  <div class="grid-2" style="align-items:start;">
+
+    <!-- LEFT: COMPOSE + OUTBOX -->
+    <div>
+      <!-- COMPOSE -->
+      <div class="panel g">
+        <div class="panel-title">⬡ Compose
+          <span class="panel-sub">Post to public feed or send directly to a peer DID</span>
+        </div>
+        <div class="field">
+          <label>Message</label>
+          <textarea id="compose-text" rows="4" placeholder="Write something…"></textarea>
+        </div>
+        <!-- File attach -->
+        <div class="field">
+          <label>Attach File (optional)</label>
+          <div id="drop-zone" style="border:1px dashed var(--border2);border-radius:6px;padding:16px;text-align:center;cursor:pointer;transition:.2s;font-size:10px;color:var(--text3);"
+            onclick="document.getElementById('file-input').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--green)'"
+            ondragleave="this.style.borderColor='var(--border2)'"
+            ondrop="FeedMailbox.dropFile(event)">
+            Drop a file here or click to browse
+          </div>
+          <input type="file" id="file-input" style="display:none;" onchange="FeedMailbox.pickFile(this)">
+          <div id="attach-preview" style="margin-top:6px;display:none;">
+            <div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;">
+              <div>
+                <div style="font-size:11px;color:var(--green);" id="attach-name">—</div>
+                <div style="font-size:9px;color:var(--text3);" id="attach-meta">—</div>
+              </div>
+              <button class="btn r" style="padding:3px 8px;font-size:9px;" onclick="FeedMailbox.clearAttach()">✕</button>
+            </div>
+          </div>
+        </div>
+        <!-- Recipient -->
+        <div class="field">
+          <label>Recipient DID (blank = broadcast to all peers)</label>
+          <input id="compose-to" placeholder="did:sovereign:… (leave blank for broadcast)">
+        </div>
+        <div class="btn-row">
+          <button class="btn g" onclick="FeedMailbox.send()">Sign &amp; Send</button>
+          <button class="btn c" onclick="FeedMailbox.publish()">Publish to Feed</button>
+          <div id="compose-status" style="font-size:10px;padding:4px 0;color:var(--text3);"></div>
+        </div>
+      </div>
+
+      <!-- OUTBOX -->
+      <div class="panel c">
+        <div class="panel-title">⬡ Outbox — Your Published Items
+          <span class="panel-sub">Keccak-signed · persisted to IDB</span>
+        </div>
+        <div id="outbox-list">
+          <div style="color:var(--text3);font-size:11px;">Nothing published yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: INBOX -->
+    <div>
+      <div class="panel p" style="position:sticky;top:68px;">
+        <div class="panel-title">⬡ Inbox
+          <span class="panel-sub">Messages &amp; files received from peer DIDs</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <span id="inbox-count" style="font-size:10px;color:var(--text3);">0 messages</span>
+          <button class="btn p" style="padding:3px 10px;font-size:9px;margin-left:auto;" onclick="FeedMailbox.clearInbox()">Clear</button>
+        </div>
+        <div id="inbox-list" style="max-height:calc(100vh - 260px);overflow-y:auto;">
+          <div style="color:var(--text3);font-size:11px;">No messages received.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /app-wrap -->
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div style="font-size:14px;font-weight:700;color:var(--cyan);margin-bottom:12px;" id="modal-title">Notice</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.75;margin-bottom:16px;" id="modal-body"></div>
+    <button class="btn c" onclick="closeModal()">Dismiss</button>
+  </div>
+</div>
+
+<script type="module">
+'use strict';
+
+// ══════════════════════════════════════════════════════════
+// KECCAK BLACK BOX ENGINE
+// Full Keccak-f[1600] · 24 rounds · STATE_SIZE=200, RATE=136
+// ══════════════════════════════════════════════════════════
+const KeccakEngine = (() => {
+  const RATE = 136;
+
+  const RC = [
+    0x0000000000000001n,0x0000000000008082n,0x800000000000808an,0x8000000080008000n,
+    0x000000000000808bn,0x0000000080000001n,0x8000000080008081n,0x8000000000008009n,
+    0x000000000000008an,0x0000000000000088n,0x0000000080008009n,0x000000008000000an,
+    0x000000008000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,
+    0x8000000000008002n,0x8000000000000080n,0x000000000000800an,0x800000008000000an,
+    0x8000000080008081n,0x8000000000008080n,0x0000000080000001n,0x8000000080008008n
+  ];
+  const ROT = [0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
+  const M64 = 0xFFFFFFFFFFFFFFFFn;
+
+  const rl=(x,n)=>{n=BigInt(n);return((x<<n)|(x>>(64n-n)))&M64;};
+
+  function kF(S){
+    S=[...S];
+    for(let r=0;r<24;r++){
+      const C=new Array(5).fill(0n);
+      for(let x=0;x<5;x++)C[x]=S[x]^S[x+5]^S[x+10]^S[x+15]^S[x+20];
+      const D=new Array(5).fill(0n);
+      for(let x=0;x<5;x++)D[x]=C[(x+4)%5]^rl(C[(x+1)%5],1);
+      for(let i=0;i<25;i++)S[i]^=D[i%5];
+      const B=new Array(25).fill(0n);
+      for(let x=0;x<5;x++)for(let y=0;y<5;y++){const i=x+5*y,ni=y+5*((2*x+3*y)%5);B[ni]=rl(S[i],ROT[i]);}
+      for(let x=0;x<5;x++)for(let y=0;y<5;y++){const i=x+5*y;S[i]=B[i]^((~B[((x+1)%5)+5*y])&B[((x+2)%5)+5*y]);}
+      S[0]^=RC[r];
+    }
+    return S;
+  }
+
+  function b2l(b){const l=new Array(25).fill(0n);for(let i=0;i<25;i++){let v=0n;for(let j=0;j<8;j++)v|=BigInt(b[i*8+j]||0)<<BigInt(8*j);l[i]=v&M64;}return l;}
+  function l2b(l){const o=new Uint8Array(200);for(let i=0;i<25;i++){let v=l[i];for(let j=0;j<8;j++){o[i*8+j]=Number(v&0xffn);v>>=8n;}}return o;}
+
+  let _st=new Uint8Array(200);let _steps=[];let _sc=0;
+
+  function absorbChunk(chunk){
+    const p=new Uint8Array(RATE);p.set(chunk.slice(0,RATE));
+    if(chunk.length<RATE){p[chunk.length]^=0x01;p[RATE-1]^=0x80;}
+    const xd=_st.slice();for(let i=0;i<RATE;i++)xd[i]^=p[i];
+    const ap=l2b(kF(b2l(xd)));_st=ap;
+    _steps.push({id:_sc++,afterPermute:ap.slice()});
+    return _st;
+  }
+
+  function feedBytes(input){
+    const b=typeof input==='string'?new TextEncoder().encode(input):input;
+    let i=0;
+    do{absorbChunk(b.slice(i,i+RATE));i+=RATE;}while(i<b.length);
+  }
+
+  function squeeze32(){return _st.slice(0,32);}
+  function getState(){return _st.slice();}
+  function getStepCount(){return _steps.length;}
+  function getStateHex(){return Array.from(_st.slice(0,8)).map(b=>b.toString(16).padStart(2,'0')).join('');}
+  function reset(){_st=new Uint8Array(200);_steps=[];_sc=0;}
+
+  let _pool=new Uint8Array(0);
+  let _ready=false;
+
+  function append(b){const m=new Uint8Array(_pool.length+b.length);m.set(_pool);m.set(b,_pool.length);_pool=m;_sync();}
+
+  function _sync(){
+    reset();
+    if(_pool.length>0)feedBytes(_pool);
+    const pct=Math.min(100,Math.round((_pool.length/160)*100));
+    const ev=document.getElementById('epct');if(ev)ev.textContent=pct+'%';
+    const eb=document.getElementById('ebar');if(eb)eb.style.width=pct+'%';
+    const er=document.getElementById('ering');if(er)er.style.setProperty('--ep',pct+'%');
+    _renderSponge();
+    if(pct>=100&&!_ready){_ready=true;const b=document.getElementById('btn-gen');if(b)b.disabled=false;_log('Entropy threshold reached','ok');}
+  }
+
+  function _renderSponge(){
+    const g=document.getElementById('sponge');if(!g)return;
+    const st=getState();g.innerHTML='';
+    for(let i=0;i<200;i++){
+      const c=document.createElement('div');c.className='sc';
+      const v=st[i];const h=(v/255)*180+160;const l=12+(v/255)*40;
+      c.style.background=`hsl(${h},75%,${l}%)`;g.appendChild(c);
+    }
+  }
+
+  function _log(msg,cls='info'){
+    const el=document.getElementById('elog');if(!el)return;
+    const d=document.createElement('div');d.className='ll '+cls;d.textContent='[KECCAK] '+msg;
+    el.appendChild(d);el.scrollTop=el.scrollHeight;
+  }
+
+  function setDot(id,live){const e=document.getElementById(id);if(e){e.className='status-dot'+(live?' live':'');}}
+
+  function startCollection(){
+    _log('Starting entropy collection…','info');
+    const hw=new Uint8Array(64);crypto.getRandomValues(hw);append(hw);setDot('d-hw',true);_log('Hardware CSPRNG: 64 bytes','ok');
+    const tm=[];for(let i=0;i<32;i++)tm.push(Math.round((performance.now()-Math.floor(performance.now()))*1e6)&0xff);
+    append(new Uint8Array(tm));setDot('d-tm',true);_log('Timing: 32 samples','ok');
+    const intent=document.getElementById('intent')?.value;
+    if(intent){append(new TextEncoder().encode(intent));setDot('d-in',true);_log(`Intent: "${intent.substr(0,30)}"…`,'ok');}
+    const ms=[];
+    const mmv=e=>{ms.push(e.clientX&0xff,e.clientY&0xff,(Math.round(e.movementX*10))&0xff);if(ms.length>=48){append(new Uint8Array(ms.splice(0,48)));setDot('d-ms',true);}};
+    window.addEventListener('mousemove',mmv);
+    setTimeout(()=>{
+      window.removeEventListener('mousemove',mmv);
+      const ex=new Uint8Array(32);crypto.getRandomValues(ex);append(ex);
+      _log('Collection complete','ok');
+    },3000);
+  }
+
+  function getFinalSeed(){
+    const intent=document.getElementById('intent')?.value;
+    if(intent)append(new TextEncoder().encode(intent));
+    const tm=[];for(let i=0;i<8;i++)tm.push(Math.round((performance.now()-Math.floor(performance.now()))*1e6)&0xff);
+    append(new Uint8Array(tm));
+    return squeeze32();
+  }
+
+  // Init sponge display on load
+  function initDisplay(){
+    reset();const g=document.getElementById('sponge');if(!g)return;
+    for(let i=0;i<200;i++){const c=document.createElement('div');c.className='sc';c.style.background='var(--border)';g.appendChild(c);}
+  }
+
+  return{startCollection,getFinalSeed,getState,getStepCount,getStateHex,reset,initDisplay,_ready:()=>_ready};
+})();
+window.KeccakEngine=KeccakEngine;
+
+
+// ══════════════════════════════════════════════════════════
+// SHAMIR SECRET SHARING — GF(256) · 3-of-5
+// ══════════════════════════════════════════════════════════
+const Shamir = (() => {
+  const EXP=new Uint8Array(512),LOG=new Uint8Array(256);
+  {let x=1;for(let i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x=x<<1;if(x>=256)x^=0x11b;}for(let i=255;i<512;i++)EXP[i]=EXP[i-255];}
+  const gm=(a,b)=>(a&&b)?EXP[LOG[a]+LOG[b]]:0;
+  const gd=(a,b)=>(a&&b)?EXP[LOG[a]+255-LOG[b]]:0;
+
+  function ep(co,x){let r=0;for(let i=co.length-1;i>=0;i--)r=gm(r,x)^co[i];return r;}
+
+  function split(secret,n=5,t=3){
+    const sh=Array.from({length:n},(_,i)=>new Uint8Array(secret.length+1));
+    for(let si=0;si<secret.length;si++){
+      const co=new Uint8Array(t);co[0]=secret[si];crypto.getRandomValues(co.subarray(1));
+      for(let j=0;j<n;j++){sh[j][0]=j+1;sh[j][si+1]=ep(co,j+1);}
+    }
+    return sh;
+  }
+
+  function combine(shares){
+    const sl=shares[0].length-1;const sec=new Uint8Array(sl);
+    const xs=shares.map(s=>s[0]);
+    for(let si=0;si<sl;si++){
+      const ys=shares.map(s=>s[si+1]);let r=0;
+      for(let i=0;i<shares.length;i++){
+        let num=1,den=1;
+        for(let j=0;j<shares.length;j++)if(i!==j){num=gm(num,xs[j]);den=gm(den,xs[i]^xs[j]);}
+        r^=gm(ys[i],gd(num,den));
+      }
+      sec[si]=r;
+    }
+    return sec;
+  }
+  return{split,combine};
+})();
+
+
+// ══════════════════════════════════════════════════════════
+// SHAMIR RECOVERY MODULE
+// ══════════════════════════════════════════════════════════
+const ShamirRecovery = (() => {
+  let _shares=[],_secretHex='';
+  const toHex=u8=>Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const fromHex=h=>new Uint8Array(h.match(/.{1,2}/g).map(x=>parseInt(x,16)));
+
+  function _log(msg,cls='info'){
+    const el=document.getElementById('slog');if(!el)return;
+    const d=document.createElement('div');d.className='ll '+cls;d.textContent='[SHAMIR] '+msg;
+    el.appendChild(d);el.scrollTop=el.scrollHeight;
+  }
+
+  function generate(privHex){
+    _secretHex=privHex;
+    _shares=Shamir.split(fromHex(privHex),5,3);
+    const grid=document.getElementById('share-display');if(!grid)return;
+    grid.innerHTML='';
+    _shares.forEach((sh,i)=>{
+      const hex=toHex(sh);
+      const card=document.createElement('div');card.className='share-card';card.id='sc-'+i;
+      card.onclick=()=>{navigator.clipboard.writeText(hex).then(()=>{card.classList.add('copied');setTimeout(()=>card.classList.remove('copied'),1500);});};
+      card.innerHTML=`<div class="share-num">Share ${i+1} / 5</div><div class="share-hex">${hex.substr(0,20)}…${hex.substr(-12)}</div><div style="font-size:7px;color:var(--text3);margin-top:3px;">click to copy</div>`;
+      grid.appendChild(card);
+    });
+    _log(`5 shares generated · GF(256) · 3-of-5`,'ok');
+    _log('Distribute to 5 different trusted locations','info');
+    const btn=document.getElementById('btn-confirm');if(btn)btn.disabled=false;
+  }
+
+  function test(){
+    try{
+      const raw=document.getElementById('rec-input')?.value.trim()||'';
+      const hexes=raw.split(',').map(s=>s.trim()).filter(Boolean);
+      if(hexes.length<3){showModal('Recovery','Need at least 3 shares');return;}
+      const shares=hexes.slice(0,3).map(h=>fromHex(h));
+      const rec=Shamir.combine(shares);
+      const recHex=toHex(rec);
+      const el=document.getElementById('rec-result');if(!el)return;
+      if(recHex===_secretHex){
+        el.innerHTML='<span style="color:var(--green);">✓ Recovery matches — key intact</span>';
+        _log('Recovery test PASSED','ok');
+      }else{
+        el.innerHTML='<span style="color:var(--red);">✗ Mismatch</span>';
+        _log('Recovery test FAILED','err');
+      }
+    }catch(e){showModal('Error',e.message);}
+  }
+
+  function getShares(){return _shares;}
+  function toHexFn(u8){return Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join('');}
+  return{generate,test,getShares,toHex:toHexFn};
+})();
+window.ShamirRecovery=ShamirRecovery;
+
+
+// ══════════════════════════════════════════════════════════
+// IDENTITY ENGINE
+// ══════════════════════════════════════════════════════════
+const IdentityEngine = (() => {
+  const ADJ=['sovereign','cryptic','liminal','fractal','archaic','kinetic','nebular','oblique','primal','spectral','tesseral','vaulted','warden','zenith','arcane','cipher','delta','echo','forge','ghost','herald','iron','jade','koan','light','mnemonic','null','oracle','phased','quartz','radix','signal','totem','umbra','vector','wisp','xenon','yield','zero','axiom'];
+  const NOUNS=['gate','node','shard','vault','mirror','bridge','lens','fold','chain','core','field','forge','grove','haven','iris','joint','key','loom','mesh','nexus','orbit','prism','ridge','sieve','tower','union','veil','wire','axis','bloom','crest','dawn','edge','flux','glyph','hinge','knot','lace','mind','null'];
+
+  let _id=null;
+
+  async function sha256(b){const h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('');}
+
+  async function generateFromSeed(seed32){
+    const kp=await crypto.subtle.generateKey({name:'Ed25519'},true,['sign','verify']);
+    const spki=await crypto.subtle.exportKey('spki',kp.publicKey);
+    const pkcs8=await crypto.subtle.exportKey('pkcs8',kp.privateKey);
+    const pubHex=Array.from(new Uint8Array(spki)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const privHex=Array.from(new Uint8Array(pkcs8)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const did='did:sovereign:'+(await sha256(new TextEncoder().encode(pubHex))).substr(0,24);
+    const a=seed32[0]%ADJ.length,n=seed32[1]%NOUNS.length;
+    const num=((seed32[2]<<8)|seed32[3])%9000+1000;
+    const username=`${ADJ[a]}-${NOUNS[n]}-${num}`;
+    const ts=Date.now();
+    _id={did,username,pubKeyHex:pubHex,privKeyHex:privHex,createdAt:ts,
+         entropySteps:KeccakEngine.getStepCount(),keccakStateHash:KeccakEngine.getStateHex(),keyPair:kp};
+    await _persist(_id);
+    return _id;
+  }
+
+  async function _openDB(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open('sovereign_os',4);
+      r.onupgradeneeded=e=>{
+        const db=e.target.result;
+        if(!db.objectStoreNames.contains('identities'))db.createObjectStore('identities',{keyPath:'did'});
+        if(!db.objectStoreNames.contains('keyvault'))db.createObjectStore('keyvault',{keyPath:'did'});
+        if(!db.objectStoreNames.contains('registry'))db.createObjectStore('registry',{keyPath:'did'});
+        if(!db.objectStoreNames.contains('assets'))db.createObjectStore('assets',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('proposals'))db.createObjectStore('proposals',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('state_chain'))db.createObjectStore('state_chain',{keyPath:'index'});
+        if(!db.objectStoreNames.contains('votes'))db.createObjectStore('votes',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('outbox'))db.createObjectStore('outbox',{keyPath:'id'});
+        if(!db.objectStoreNames.contains('inbox'))db.createObjectStore('inbox',{keyPath:'id'});
+      };
+      r.onsuccess=e=>res(e.target.result);r.onerror=e=>rej(e.target.error);
+    });
+  }
+
+  async function _persist(id){
+    const salt=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(id.did+navigator.userAgent));
+    const wm=await crypto.subtle.importKey('raw',salt,'PBKDF2',false,['deriveKey']);
+    const wk=await crypto.subtle.deriveKey({name:'PBKDF2',salt:new Uint8Array(salt),iterations:310000,hash:'SHA-256'},wm,{name:'AES-GCM',length:256},false,['encrypt']);
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const raw=new Uint8Array(id.privKeyHex.match(/.{2}/g).map(h=>parseInt(h,16)));
+    const enc=await crypto.subtle.encrypt({name:'AES-GCM',iv},wk,raw);
+    const toHex=b=>Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+    const db=await _openDB();
+    const tx=db.transaction(['identities','keyvault'],'readwrite');
+    tx.objectStore('identities').put({did:id.did,username:id.username,pubKeyHex:id.pubKeyHex,createdAt:id.createdAt,entropySteps:id.entropySteps,keccakStateHash:id.keccakStateHash});
+    tx.objectStore('keyvault').put({did:id.did,encHex:toHex(enc),ivHex:toHex(iv),storedAt:Date.now()});
+    return new Promise((res,rej)=>{tx.oncomplete=()=>res(true);tx.onerror=rej;});
+  }
+
+  function get(){return _id;}
+  function openDB(){return _openDB();}
+  return{generateFromSeed,get,openDB};
+})();
+
+
+// ══════════════════════════════════════════════════════════
+// FEED / MAILBOX ENGINE
+// Compose posts + file attachments, sign with Ed25519 (SHA-256
+// digest used as proxy sig since keyPair may not survive reload),
+// persist outbox to IDB, receive into inbox via P2P MAIL_MSG.
+// File transfers: base64-encoded in payload, chunked if >256KB.
+// ══════════════════════════════════════════════════════════
+const FeedMailbox = (() => {
+  let _outbox=[], _inbox=[], _attach=null, _loaded=false;
+
+  // ── helpers ──────────────────────────────────────────────
+  async function sha256hex(input){
+    const buf = input instanceof Uint8Array ? input : new TextEncoder().encode(input);
+    const h = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  function toB64(u8){
+    let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode(...u8.subarray(i,i+0x8000));
+    return btoa(s);
+  }
+  function fromB64(s){ const b=atob(s); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u; }
+
+  function fmtSize(bytes){
+    if(bytes<1024)return bytes+'B';
+    if(bytes<1048576)return (bytes/1024).toFixed(1)+'KB';
+    return (bytes/1048576).toFixed(2)+'MB';
+  }
+
+  function _status(msg,ok=true){
+    const el=document.getElementById('compose-status');
+    if(el){el.textContent=msg;el.style.color=ok?'var(--green)':'var(--red)';}
+  }
+
+  function _bumpBadge(){
+    const b=document.getElementById('inbox-badge');
+    const unread=_inbox.filter(m=>!m.read).length;
+    if(b){
+      if(unread>0){b.textContent=unread;b.style.display='inline';}
+      else b.style.display='none';
+    }
+    const c=document.getElementById('inbox-count');
+    if(c)c.textContent=`${_inbox.length} message${_inbox.length!==1?'s':''} · ${unread} unread`;
+  }
+
+  // ── IDB helpers ──────────────────────────────────────────
+  async function _loadFromIDB(){
+    if(_loaded)return;
+    try{
+      const db=await IdentityEngine.openDB();
+      const [ob, ib]=await Promise.all([
+        new Promise((res,rej)=>{const tx=db.transaction('outbox','readonly');const r=tx.objectStore('outbox').getAll();r.onsuccess=e=>res(e.target.result);r.onerror=rej;}),
+        new Promise((res,rej)=>{const tx=db.transaction('inbox','readonly');const r=tx.objectStore('inbox').getAll();r.onsuccess=e=>res(e.target.result);r.onerror=rej;}),
+      ]);
+      _outbox=ob||[];
+      _inbox=ib||[];
+      _loaded=true;
+      _renderOutbox();
+      _renderInbox();
+      _bumpBadge();
+    }catch(e){ console.warn('FeedMailbox IDB load:',e); }
+  }
+
+  async function _saveMsg(store, msg){
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction(store,'readwrite');
+      tx.objectStore(store).put(msg);
+    }catch(e){console.warn('FeedMailbox save:',e);}
+  }
+
+  // ── File attach ──────────────────────────────────────────
+  function dropFile(ev){
+    ev.preventDefault();
+    document.getElementById('drop-zone').style.borderColor='var(--border2)';
+    const f=ev.dataTransfer?.files?.[0];
+    if(f)_attachFile(f);
+  }
+
+  function pickFile(input){
+    const f=input?.files?.[0];
+    if(f)_attachFile(f);
+  }
+
+  function _attachFile(f){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const bytes=new Uint8Array(e.target.result);
+      _attach={name:f.name,type:f.type||'application/octet-stream',size:f.size,bytes};
+      const prev=document.getElementById('attach-preview');
+      const nm=document.getElementById('attach-name');
+      const mt=document.getElementById('attach-meta');
+      if(prev)prev.style.display='block';
+      if(nm)nm.textContent=f.name;
+      if(mt)mt.textContent=`${fmtSize(f.size)} · ${f.type||'binary'}`;
+    };
+    reader.readAsArrayBuffer(f);
+  }
+
+  function clearAttach(){
+    _attach=null;
+    const prev=document.getElementById('attach-preview');
+    if(prev)prev.style.display='none';
+    document.getElementById('file-input').value='';
+  }
+
+  // ── Build outgoing message ────────────────────────────────
+  async function _buildMsg(text, toDID, isPublic){
+    const id=IdentityEngine.get();
+    if(!id){showModal('Feed','Generate identity first');return null;}
+    const ts=Date.now();
+    const kState=KeccakEngine.getStateHex();
+    let filePayload=null;
+    if(_attach){
+      const fileHash=await sha256hex(_attach.bytes);
+      filePayload={
+        name:_attach.name,
+        mimeType:_attach.type,
+        size:_attach.size,
+        b64:toB64(_attach.bytes),
+        hash:fileHash
+      };
+    }
+    const msgBody=JSON.stringify({text,file:filePayload?{name:filePayload.name,hash:filePayload.hash,size:filePayload.size}:null,from:id.did,to:toDID||'*',ts,keccakState:kState,public:isPublic});
+    const msgHash=await sha256hex(msgBody);
+    // Sign with subtle crypto if keypair is live, else use hash as proof-of-work
+    let sig=null;
+    if(id.keyPair){
+      try{
+        const enc=new TextEncoder().encode(msgBody);
+        const sigBuf=await crypto.subtle.sign({name:'Ed25519'},id.keyPair.privateKey,enc);
+        sig=Array.from(new Uint8Array(sigBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      }catch{}
+    }
+    return{id:'msg-'+ts,text,from:id.did,fromUsername:id.username,to:toDID||'*',ts,keccakState:kState,hash:msgHash,sig,public:isPublic,file:filePayload,read:false};
+  }
+
+  // ── Publish to feed (broadcast, stored in outbox) ─────────
+  async function publish(){
+    const text=(document.getElementById('compose-text')?.value||'').trim();
+    if(!text&&!_attach){_status('Nothing to publish','false');return;}
+    const msg=await _buildMsg(text, null, true);
+    if(!msg)return;
+    _outbox.push(msg);
+    await _saveMsg('outbox',{...msg,file:msg.file?{...msg.file,b64:undefined}:null}); // strip b64 from IDB
+    _renderOutbox();
+    // Broadcast over P2P (with file payload for peers)
+    const sent=P2PNet.broadcast({type:'MAIL_MSG',payload:msg});
+    _status(`Published to feed · broadcast to ${sent} peer(s)`);
+    document.getElementById('compose-text').value='';
+    clearAttach();
+    // Also add to our own inbox as "sent" confirmation
+  }
+
+  // ── Send directly to a DID ────────────────────────────────
+  async function send(){
+    const text=(document.getElementById('compose-text')?.value||'').trim();
+    const toDID=(document.getElementById('compose-to')?.value||'').trim();
+    if(!text&&!_attach){_status('Nothing to send','false');return;}
+    if(!toDID){
+      _status('Enter a recipient DID or use Publish for broadcast',false);return;
+    }
+    const msg=await _buildMsg(text, toDID, false);
+    if(!msg)return;
+    _outbox.push(msg);
+    await _saveMsg('outbox',{...msg,file:msg.file?{...msg.file,b64:undefined}:null});
+    _renderOutbox();
+    const sent=P2PNet.broadcast({type:'MAIL_MSG',payload:msg});
+    if(sent>0){_status(`Sent to ${sent} peer(s) — recipient must be connected`);}
+    else{_status('No peers connected — message saved locally',false);}
+    document.getElementById('compose-text').value='';
+    document.getElementById('compose-to').value='';
+    clearAttach();
+  }
+
+  // ── Receive incoming message ──────────────────────────────
+  async function receive(msg){
+    // Skip our own messages
+    const me=IdentityEngine.get();
+    if(msg.from===me?.did)return;
+    // Check if addressed to us or broadcast
+    if(msg.to!=='*'&&msg.to!==me?.did)return;
+    const incoming={...msg,read:false,receivedAt:Date.now()};
+    _inbox.unshift(incoming);
+    await _saveMsg('inbox',{...incoming,file:incoming.file?{...incoming.file,b64:undefined}:null});
+    _renderInbox();
+    _bumpBadge();
+  }
+
+  // ── Generate shareable file manifest (no IPFS, local JSON) ─
+  async function _generateShareLink(msg){
+    if(!msg.file)return;
+    // Find the full outbox item with b64
+    const full=_outbox.find(m=>m.id===msg.id);
+    if(!full?.file?.b64){showModal('Share','File data not available in current session (reload lost it). Re-send to regenerate.');return;}
+    const manifest={
+      version:'1.0',
+      type:'sovereign-file-share',
+      from:msg.fromUsername,
+      fromDID:msg.from,
+      fileName:full.file.name,
+      mimeType:full.file.mimeType,
+      size:full.file.size,
+      hash:full.file.hash,
+      keccakState:msg.keccakState,
+      timestamp:msg.ts,
+      msgHash:msg.hash,
+      data:full.file.b64
+    };
+    const blob=new Blob([JSON.stringify(manifest,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`sovereign-share-${full.file.name}.json`;
+    a.click();
+    showModal('Share Link','File manifest downloaded. Share the JSON file with anyone — they can drag it into their inbox or open it with a compatible reader. Hash: '+full.file.hash);
+  }
+
+  // ── Download file from an inbox message ──────────────────
+  function _downloadFile(msg){
+    if(!msg.file){return;}
+    if(msg.file.b64){
+      const bytes=fromB64(msg.file.b64);
+      const blob=new Blob([bytes],{type:msg.file.mimeType||'application/octet-stream'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=msg.file.name;a.click();
+    }else{
+      showModal('Download','File data not in current session. Ask sender to resend, or import from share manifest.');
+    }
+  }
+
+  // Import from a share manifest JSON file
+  function importShareManifest(input){
+    const f=input?.files?.[0];if(!f)return;
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      try{
+        const m=JSON.parse(e.target.result);
+        if(m.type!=='sovereign-file-share')throw new Error('Not a sovereign share manifest');
+        // Verify hash
+        const bytes=fromB64(m.data);
+        const computedHash=await sha256hex(bytes);
+        if(computedHash!==m.hash){
+          showModal('Import','Hash mismatch — file may be corrupted or tampered with.');
+          return;
+        }
+        const synthetic={
+          id:'imported-'+Date.now(),text:`[Imported file: ${m.fileName}]`,
+          from:m.fromDID,fromUsername:m.from,to:'*',ts:m.timestamp,
+          keccakState:m.keccakState,hash:m.msgHash,sig:null,public:true,
+          file:{name:m.fileName,mimeType:m.mimeType,size:m.size,hash:m.hash,b64:m.data},
+          read:false,receivedAt:Date.now(),imported:true
+        };
+        _inbox.unshift(synthetic);
+        await _saveMsg('inbox',{...synthetic,file:{...synthetic.file,b64:undefined}});
+        _renderInbox();
+        _bumpBadge();
+        showModal('Import Success',`File "${m.fileName}" imported. Hash verified ✓\nFrom: ${m.from}\nSize: ${fmtSize(m.size)}`);
+      }catch(e){showModal('Import Error',e.message);}
+    };
+    reader.readAsText(f);
+  }
+
+  function clearInbox(){
+    _inbox=[];
+    try{IdentityEngine.openDB().then(db=>{const tx=db.transaction('inbox','readwrite');tx.objectStore('inbox').clear();});}catch{}
+    _renderInbox();_bumpBadge();
+  }
+
+  // ── Renderers ────────────────────────────────────────────
+  function _renderOutbox(){
+    const el=document.getElementById('outbox-list');if(!el)return;
+    if(!_outbox.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;">Nothing published yet.</div>';return;}
+    el.innerHTML='';
+    _outbox.slice().sort((a,b)=>b.ts-a.ts).slice(0,50).forEach(msg=>{
+      const div=document.createElement('div');div.className='card';
+      div.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <span class="badge ${msg.public?'g':'c'}" style="margin-right:6px;">${msg.public?'PUBLIC':'DIRECT'}</span>
+            ${msg.to!=='*'?`<span class="badge y">→ ${msg.to.substr(14,10)}…</span>`:''}
+          </div>
+          <div style="font-size:9px;color:var(--text3);">${new Date(msg.ts).toLocaleString()}</div>
+        </div>
+        ${msg.text?`<div style="font-size:11px;color:var(--text);line-height:1.6;margin-bottom:6px;">${msg.text}</div>`:''}
+        ${msg.file?`<div class="card" style="display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:6px;">
+          <div style="font-size:18px;">📎</div>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:var(--orange);">${msg.file.name}</div>
+            <div style="font-size:9px;color:var(--text3);">${fmtSize(msg.file.size||0)} · ${msg.file.mimeType||'binary'}</div>
+          </div>
+          <button class="btn c" style="padding:3px 8px;font-size:9px;" onclick="FeedMailbox._generateShareLinkById('${msg.id}')">Share Link</button>
+        </div>`:''}
+        <div style="font-size:8px;color:var(--text3);">hash: ${msg.hash.substr(0,24)}… · keccak: ${msg.keccakState}</div>
+      `;
+      el.appendChild(div);
+    });
+  }
+
+  function _renderInbox(){
+    const el=document.getElementById('inbox-list');if(!el)return;
+    if(!_inbox.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;">No messages received.</div>';return;}
+    el.innerHTML='';
+    _inbox.slice(0,100).forEach(msg=>{
+      msg.read=true; // mark read on render
+      const div=document.createElement('div');div.className='card';
+      div.style.borderColor=msg.file?'rgba(255,107,53,0.3)':'var(--border2)';
+      div.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <span style="font-size:11px;font-weight:600;color:var(--cyan);">${msg.fromUsername||msg.from.substr(14,10)+'…'}</span>
+            ${msg.imported?'<span class="badge y" style="margin-left:6px;">IMPORTED</span>':''}
+            <span class="badge ${msg.public?'g':'p'}" style="margin-left:4px;">${msg.public?'PUBLIC':'DIRECT'}</span>
+          </div>
+          <div style="font-size:9px;color:var(--text3);">${new Date(msg.receivedAt||msg.ts).toLocaleString()}</div>
+        </div>
+        ${msg.text?`<div style="font-size:11px;color:var(--text);line-height:1.6;margin-bottom:6px;">${msg.text}</div>`:''}
+        ${msg.file?`<div class="card" style="display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:6px;border-color:var(--orange);">
+          <div style="font-size:18px;">📎</div>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:var(--orange);">${msg.file.name}</div>
+            <div style="font-size:9px;color:var(--text3);">${fmtSize(msg.file.size||0)} · hash: ${(msg.file.hash||'').substr(0,16)}…</div>
+          </div>
+          ${msg.file.b64?`<button class="btn g" style="padding:3px 8px;font-size:9px;" onclick="FeedMailbox._downloadInboxFile('${msg.id}')">Download</button>`:'<span style="font-size:9px;color:var(--text3);">no data</span>'}
+        </div>`:''}
+        <div style="font-size:8px;color:var(--text3);">from: ${msg.from.substr(0,30)}… · ${msg.hash.substr(0,20)}…</div>
+      `;
+      el.appendChild(div);
+    });
+    _bumpBadge(); // re-compute since we just marked all as read
+  }
+
+  // Public shim methods for onclick handlers
+  function _generateShareLinkById(id){
+    const msg=_outbox.find(m=>m.id===id);
+    if(msg)_generateShareLink(msg);
+  }
+  function _downloadInboxFile(id){
+    const msg=_inbox.find(m=>m.id===id);
+    if(msg)_downloadFile(msg);
+  }
+
+  function loadFromIDB(){return _loadFromIDB();}
+
+  return{
+    send,publish,receive,clearInbox,loadFromIDB,
+    dropFile,pickFile,clearAttach,importShareManifest,
+    _generateShareLinkById,_downloadInboxFile
+  };
+})();
+window.FeedMailbox=FeedMailbox;
+
+
+// ══════════════════════════════════════════════════════════
+// GOVERNANCE ENGINE — fully persistent, IDB-backed, peer-sync ready
+// ══════════════════════════════════════════════════════════
+const Governance = (() => {
+  let _proposals=[],_chainLen=0,_loaded=false;
+
+  async function sha256hex(str){
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  // Load all proposals + state chain from IDB on startup
+  async function loadFromIDB(){
+    if(_loaded)return;
+    try{
+      const db=await IdentityEngine.openDB();
+      // Load proposals
+      const pAll=await new Promise((res,rej)=>{
+        const tx=db.transaction('proposals','readonly');
+        const r=tx.objectStore('proposals').getAll();
+        r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+      });
+      _proposals=pAll||[];
+      // Load state chain to get current length
+      const cAll=await new Promise((res,rej)=>{
+        const tx=db.transaction('state_chain','readonly');
+        const r=tx.objectStore('state_chain').getAll();
+        r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+      });
+      _chainLen=(cAll||[]).length;
+      // Re-render chain entries (most recent 10)
+      const chainEl=document.getElementById('state-chain');
+      if(chainEl&&cAll.length){
+        chainEl.innerHTML='';
+        cAll.slice().reverse().slice(0,10).forEach(entry=>{
+          _renderChain(entry,entry.root);
+        });
+      }
+      _loaded=true;
+      _render();
+      _updateMetrics();
+    }catch(e){console.warn('Governance IDB load failed:',e);}
+  }
+
+  async function submit(){
+    const id=IdentityEngine.get();
+    if(!id){showModal('Governance','Generate identity first');return;}
+    const title=document.getElementById('prop-title')?.value.trim();
+    const desc=document.getElementById('prop-desc')?.value.trim();
+    const type=document.getElementById('prop-type')?.value;
+    if(!title){showModal('Governance','Title required');return;}
+    const ts=Date.now();
+    const pHash=await sha256hex(`${id.did}:${title}:${ts}`);
+    const prop={id:'prop-'+ts,title,desc,type,author:id.did,createdAt:ts,hash:pHash,votes:{for:0,against:0},status:'ACTIVE'};
+    _proposals.push(prop);
+    // Persist to IDB
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('proposals','readwrite');
+      tx.objectStore('proposals').put(prop);
+      await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
+    }catch(e){console.warn('Proposal persist failed:',e);}
+    _render();
+    await computeRoot();
+    document.getElementById('prop-title').value='';
+    document.getElementById('prop-desc').value='';
+    // Broadcast to peers
+    P2PNet.broadcast({type:'PROPOSAL_NEW',payload:prop});
+  }
+
+  async function vote(propId,dir){
+    const p=_proposals.find(x=>x.id===propId);if(!p)return;
+    if(dir>0)p.votes.for++;else p.votes.against++;
+    p.status=p.votes.for>p.votes.against?'PASSING':p.votes.against>p.votes.for?'FAILING':'ACTIVE';
+    // Persist updated proposal
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('proposals','readwrite');
+      tx.objectStore('proposals').put(p);
+    }catch(e){console.warn('Vote persist failed:',e);}
+    _render();
+    await computeRoot();
+    // Broadcast vote to peers
+    const id=IdentityEngine.get();
+    P2PNet.broadcast({type:'PROPOSAL_VOTE',payload:{propId,dir,voter:id?.did||'anon',ts:Date.now()}});
+  }
+
+  // Merge incoming proposal from peer — newest-wins on conflict
+  async function mergeProposal(prop){
+    const existing=_proposals.find(x=>x.id===prop.id);
+    if(!existing){
+      _proposals.push(prop);
+    }else{
+      // Merge votes: take max of each direction (avoid duplicate counts)
+      existing.votes.for=Math.max(existing.votes.for,prop.votes.for);
+      existing.votes.against=Math.max(existing.votes.against,prop.votes.against);
+      existing.status=prop.status;
+    }
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('proposals','readwrite');
+      tx.objectStore('proposals').put(existing||prop);
+    }catch(_){}
+    _render();_updateMetrics();
+  }
+
+  // Apply incoming vote from peer
+  function applyVote(voteMsg){
+    const p=_proposals.find(x=>x.id===voteMsg.propId);
+    if(!p)return;
+    if(voteMsg.dir>0)p.votes.for++;else p.votes.against++;
+    p.status=p.votes.for>p.votes.against?'PASSING':p.votes.against>p.votes.for?'FAILING':'ACTIVE';
+    try{IdentityEngine.openDB().then(db=>{const tx=db.transaction('proposals','readwrite');tx.objectStore('proposals').put(p);});}catch(_){}
+    _render();_updateMetrics();
+  }
+
+  // Return snapshot for peer sync
+  function getSnapshot(){return{proposals:[..._proposals],chainLen:_chainLen};}
+
+  // Restore from peer snapshot
+  async function applySnapshot(snap){
+    for(const p of (snap.proposals||[])){await mergeProposal(p);}
+    _render();_updateMetrics();
+  }
+
+  async function computeRoot(){
+    const state={proposals:_proposals.length,chainLen:_chainLen,ts:Date.now(),identity:IdentityEngine.get()?.did||'none'};
+    const root=await sha256hex(JSON.stringify(state));
+    _chainLen++;
+    const entry={index:_chainLen,root,ts:state.ts,proposals:_proposals.length};
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('state_chain','readwrite');
+      tx.objectStore('state_chain').put(entry);
+    }catch(_){}
+    _renderChain(entry,root);
+    _updateMetrics();
+  }
+
+  function _updateMetrics(){
+    const el1=document.getElementById('gov-proposals');if(el1)el1.textContent=_proposals.length;
+    const el2=document.getElementById('gov-votes');if(el2)el2.textContent=_proposals.reduce((s,p)=>s+p.votes.for+p.votes.against,0);
+    const id=IdentityEngine.get();
+    const el3=document.getElementById('gov-score');
+    if(id&&el3)el3.textContent=Math.floor((id.entropySteps||0)*17+_chainLen*3);
+  }
+
+  function _render(){
+    const el=document.getElementById('proposals-list');if(!el)return;
+    if(!_proposals.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;">No proposals yet. Submit one above.</div>';return;}
+    el.innerHTML='';
+    _proposals.slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(p=>{
+      const div=document.createElement('div');div.className='card';
+      div.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div style="font-size:12px;color:var(--cyan);font-weight:600;">${p.title}</div>
+          <span class="badge ${p.status==='PASSING'?'g':p.status==='FAILING'?'r':'c'}">${p.status}</span>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:8px;">${p.type} · ${new Date(p.createdAt).toLocaleString()}</div>
+        ${p.desc?`<div style="font-size:10px;color:var(--text2);margin-bottom:8px;line-height:1.6;">${p.desc}</div>`:''}
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="btn g" style="padding:4px 10px;font-size:9px;" onclick="Governance.vote('${p.id}',1)">▲ For (${p.votes.for})</button>
+          <button class="btn r" style="padding:4px 10px;font-size:9px;" onclick="Governance.vote('${p.id}',-1)">▼ Against (${p.votes.against})</button>
+          <div class="hash" style="font-size:8px;">${p.hash.substr(0,20)}…</div>
+        </div>
+      `;
+      el.appendChild(div);
+    });
+    _updateMetrics();
+  }
+
+  function _renderChain(entry,root){
+    const el=document.getElementById('state-chain');if(!el)return;
+    const div=document.createElement('div');div.className='timeline-entry ok';
+    div.innerHTML=`<div style="font-size:9px;color:var(--text3);">#${entry.index} · ${new Date(entry.ts).toLocaleTimeString()}</div>
+      <div class="hash">${root}</div>
+      <div style="font-size:9px;color:var(--green);margin-top:3px;">proposals: ${entry.proposals}</div>`;
+    el.insertBefore(div,el.firstChild);
+    // Trim display to 20 entries
+    while(el.children.length>20)el.removeChild(el.lastChild);
+  }
+
+  return{submit,vote,computeRoot,loadFromIDB,mergeProposal,applyVote,getSnapshot,applySnapshot};
+})();
+window.Governance=Governance;
+
+
+// ══════════════════════════════════════════════════════════
+// ASSET VALUATION ENGINE — IDB-backed, Keccak entropy snapshot
+// ══════════════════════════════════════════════════════════
+const Assets = (() => {
+  let _assets=[],_loaded=false;
+
+  async function sha256hex(str){
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  // Load all assets from IDB on startup
+  async function loadFromIDB(){
+    if(_loaded)return;
+    try{
+      const db=await IdentityEngine.openDB();
+      const all=await new Promise((res,rej)=>{
+        const tx=db.transaction('assets','readonly');
+        const r=tx.objectStore('assets').getAll();
+        r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+      });
+      _assets=all||[];
+      _loaded=true;
+      _renderLedger();
+      _updateMetrics();
+    }catch(e){console.warn('Assets IDB load failed:',e);}
+  }
+
+  async function register(){
+    const id=IdentityEngine.get();
+    const name=document.getElementById('asset-name')?.value.trim();
+    const type=document.getElementById('asset-type')?.value;
+    const desc=document.getElementById('asset-desc')?.value.trim();
+    const val=parseInt(document.getElementById('asset-val')?.value)||1000;
+    if(!name){showModal('Assets','Asset name required');return;}
+    const ts=Date.now();
+    const ks=KeccakEngine.getStateHex();
+    // Snapshot entropy steps at registration time — stable across reloads
+    const entropySnapshot=KeccakEngine.getStepCount();
+    const h=await sha256hex(`${name}:${type}:${ts}:${ks}:${id?.did||'anon'}`);
+    const asset={id:'asset-'+ts,name,type,desc,baseValue:val,registeredAt:ts,
+                 owner:id?.did||'anonymous',keccakSig:ks,
+                 entropySnapshot,hash:h};
+    _assets.push(asset);
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('assets','readwrite');
+      tx.objectStore('assets').put(asset);
+      await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=rej;});
+    }catch(e){console.warn('Asset persist failed:',e);}
+    _updateMetrics();
+    _renderLedger();
+    document.getElementById('asset-name').value='';
+    document.getElementById('asset-desc').value='';
+    // Broadcast to peers
+    P2PNet.broadcast({type:'ASSET_NEW',payload:asset});
+  }
+
+  // Merge incoming asset from peer — skip if we already have it
+  async function mergeAsset(asset){
+    if(_assets.find(a=>a.id===asset.id))return;
+    _assets.push(asset);
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('assets','readwrite');
+      tx.objectStore('assets').put(asset);
+    }catch(_){}
+    _renderLedger();_updateMetrics();
+  }
+
+  function getSnapshot(){return{assets:[..._assets]};}
+
+  async function applySnapshot(snap){
+    for(const a of (snap.assets||[])){await mergeAsset(a);}
+  }
+
+  function valuate(){
+    if(!_assets.length){showModal('Valuation','No assets registered.');return;}
+    const total=_assets.reduce((s,a)=>s+a.baseValue,0);
+    // Use each asset's own entropy snapshot for stable per-asset multipliers
+    const assetLines=_assets.map(a=>{
+      const eScore=(a.entropySnapshot||1)*37;
+      const mult=(1+(eScore/10000)).toFixed(3);
+      const adj=Math.floor(a.baseValue*parseFloat(mult));
+      return{...a,eScore,mult,adj};
+    });
+    const adjustedTotal=assetLines.reduce((s,a)=>s+a.adj,0);
+    const avgEntropy=Math.round(assetLines.reduce((s,a)=>s+a.eScore,0)/(assetLines.length||1));
+
+    document.getElementById('am-value').textContent=adjustedTotal.toLocaleString();
+    document.getElementById('am-entropy').textContent=avgEntropy;
+
+    const lines=assetLines.map(a=>
+      `  ${a.name.padEnd(30).substr(0,30)} ${a.type.padEnd(12).substr(0,12)} ${a.baseValue.toString().padStart(8)} × ${a.mult} = ${a.adj.toString().padStart(10)} units`
+    );
+    const report=[
+      `SOVEREIGN ASSET VALUATION REPORT`,
+      `Generated:  ${new Date().toISOString()}`,
+      `Owner:      ${IdentityEngine.get()?.did||'anonymous'}`,
+      `Assets:     ${_assets.length}`,
+      `─────────────────────────────────────────────────────────────────────────`,
+      `  ${'ASSET'.padEnd(30)} ${'TYPE'.padEnd(12)} ${'BASE'.padStart(8)}   MULT       ADJUSTED`,
+      `─────────────────────────────────────────────────────────────────────────`,
+      ...lines,
+      `─────────────────────────────────────────────────────────────────────────`,
+      `Base Total:      ${total.toLocaleString().padStart(10)} units`,
+      `Adjusted Total:  ${adjustedTotal.toLocaleString().padStart(10)} units`,
+      `Avg Entropy:     ${avgEntropy.toLocaleString().padStart(10)}`,
+    ].join('\n');
+    document.getElementById('valuation-report').textContent=report;
+  }
+
+  function _updateMetrics(){
+    const el=document.getElementById('am-total');if(el)el.textContent=_assets.length;
+  }
+
+  function _renderLedger(){
+    const el=document.getElementById('asset-ledger');if(!el)return;
+    if(!_assets.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;">No assets registered.</div>';return;}
+    el.innerHTML='';
+    _assets.slice().sort((a,b)=>b.registeredAt-a.registeredAt).forEach(a=>{
+      const div=document.createElement('div');div.className='card';
+      div.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div style="font-size:12px;color:var(--orange);font-weight:600;">${a.name}</div>
+            <div style="font-size:9px;color:var(--text3);">${a.type} · ${new Date(a.registeredAt).toLocaleString()} · owner: ${(a.owner||'').substr(14,10)}…</div>
+          </div>
+          <span class="badge c">${a.baseValue.toLocaleString()} units</span>
+        </div>
+        ${a.desc?`<div style="font-size:10px;color:var(--text2);margin-bottom:6px;">${a.desc}</div>`:''}
+        <div class="hash">keccak: ${a.keccakSig} · entropy snapshot: ${a.entropySnapshot||'—'} steps · hash: ${a.hash.substr(0,24)}…</div>
+      `;
+      el.appendChild(div);
+    });
+  }
+
+  return{register,valuate,loadFromIDB,mergeAsset,getSnapshot,applySnapshot};
+})();
+window.Assets=Assets;
+
+
+// ══════════════════════════════════════════════════════════
+// P2P NETWORK — PeerJS WebRTC · full state sync
+// Message types: BIRTH_CERT, PROPOSAL_NEW, PROPOSAL_VOTE,
+//                ASSET_NEW, SYNC_REQUEST, SYNC_RESPONSE
+// ══════════════════════════════════════════════════════════
+const P2PNet = (() => {
+  let _peer=null,_conns=new Map(),_registry=new Map();
+
+  function _log(msg,cls='info'){
+    const el=document.getElementById('p2p-log');if(!el)return;
+    const d=document.createElement('div');d.className='ll '+cls;d.textContent='[P2P] '+msg;
+    el.appendChild(d);el.scrollTop=el.scrollHeight;
+  }
+
+  function _peerId(did){return'sovereign-'+did.replace(/[^a-z0-9]/gi,'').substr(0,40).toLowerCase();}
+
+  async function init(){
+    if(_peer){_log('Already online: '+_peer.id,'ok');return;}
+    const id=IdentityEngine.get();
+    if(!id){_log('Generate identity first','warn');return;}
+    if(!window.Peer){
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
+        s.onload=res;
+        s.onerror=()=>{
+          const s2=document.createElement('script');
+          s2.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+          s2.onload=res;s2.onerror=rej;
+          document.head.appendChild(s2);
+        };
+        document.head.appendChild(s);
+      });
+    }
+    const pid=_peerId(id.did);
+    document.getElementById('my-peer-id').value=pid;
+    // Try self-hosted first, fall back to public broker
+    _peer=new Peer(pid);
+    _peer.on('open',i=>{
+      _log(`Online · Peer ID: ${i}`,'ok');
+      document.getElementById('my-peer-id').value=i;
+    });
+    _peer.on('connection',c=>{_log(`Incoming connection: ${c.peer}`,'info');_setup(c);});
+    _peer.on('error',e=>{
+      _log(`Error: ${e.type} — ${e.message||''}`, e.type==='unavailable-id'?'warn':'err');
+    });
+  }
+
+  function _setup(conn){
+    _conns.set(conn.peer,conn);
+    conn.on('open',()=>{
+      _log(`Connected: ${conn.peer}`,'ok');
+      _renderPeers();
+      // Send our birth cert
+      const id=IdentityEngine.get();
+      if(id)conn.send({type:'BIRTH_CERT',payload:_buildDoc(id)});
+      // Request full state sync from peer
+      conn.send({type:'SYNC_REQUEST'});
+    });
+    conn.on('data',async d=>{
+      if(!d?.type)return;
+      switch(d.type){
+        case 'BIRTH_CERT':
+          _registry.set(d.payload.did,d.payload);
+          _renderRegistry();
+          _log(`Birth cert received: ${d.payload.username}`,'ok');
+          // Persist to IDB registry
+          try{
+            const db=await IdentityEngine.openDB();
+            const tx=db.transaction('registry','readwrite');
+            tx.objectStore('registry').put(d.payload);
+          }catch(_){}
+          break;
+
+        case 'PROPOSAL_NEW':
+          _log(`Proposal synced: "${d.payload.title}"`, 'info');
+          await Governance.mergeProposal(d.payload);
+          break;
+
+        case 'PROPOSAL_VOTE':
+          _log(`Vote synced for ${d.payload.propId}`, 'info');
+          Governance.applyVote(d.payload);
+          break;
+
+        case 'ASSET_NEW':
+          _log(`Asset synced: "${d.payload.name}"`, 'info');
+          await Assets.mergeAsset(d.payload);
+          break;
+
+        case 'MAIL_MSG':
+          _log(`Message from: ${d.payload.fromUsername||d.payload.from?.substr(14,10)}`, 'ok');
+          await FeedMailbox.receive(d.payload);
+          break;
+
+        case 'SYNC_REQUEST':
+          // Peer wants our full state — send it
+          conn.send({
+            type:'SYNC_RESPONSE',
+            payload:{
+              gov: Governance.getSnapshot(),
+              assets: Assets.getSnapshot(),
+              registry: Array.from(_registry.values())
+            }
+          });
+          _log(`Sync state sent to ${conn.peer}`, 'info');
+          break;
+
+        case 'SYNC_RESPONSE':
+          _log(`Sync state received from ${conn.peer}`, 'ok');
+          // Apply governance
+          if(d.payload.gov) await Governance.applySnapshot(d.payload.gov);
+          // Apply assets
+          if(d.payload.assets) await Assets.applySnapshot(d.payload.assets);
+          // Apply registry
+          if(d.payload.registry){
+            for(const doc of d.payload.registry){
+              _registry.set(doc.did,doc);
+              try{
+                const db=await IdentityEngine.openDB();
+                const tx=db.transaction('registry','readwrite');
+                tx.objectStore('registry').put(doc);
+              }catch(_){}
+            }
+            _renderRegistry();
+          }
+          break;
+
+        default:
+          _log(`Unknown message type: ${d.type}`, 'warn');
+      }
+    });
+    conn.on('close',()=>{
+      _conns.delete(conn.peer);
+      _renderPeers();
+      _log(`Disconnected: ${conn.peer}`,'warn');
+    });
+    conn.on('error',e=>{_log(`Conn error: ${e}`,'err');});
+  }
+
+  function connect(pid){
+    if(!_peer){_log('Go online first','warn');return;}
+    if(!pid?.trim()){showModal('Connect','Enter a peer ID');return;}
+    const conn=_peer.connect(pid.trim(),{reliable:true});
+    _setup(conn);
+    _log(`Connecting to ${pid.trim()}…`,'info');
+  }
+
+  // Broadcast a message to ALL open connections
+  function broadcast(msg){
+    let sent=0;
+    _conns.forEach(c=>{if(c.open){c.send(msg);sent++;}});
+    return sent;
+  }
+
+  function _buildDoc(id){
+    return{did:id.did,username:id.username,pubKeyHex:id.pubKeyHex,
+           createdAt:id.createdAt,keccakStateHash:id.keccakStateHash,
+           entropySteps:id.entropySteps,version:'2.0'};
+  }
+
+  function broadcastBirth(){
+    const id=IdentityEngine.get();if(!id){_log('No identity','warn');return;}
+    const doc=_buildDoc(id);_registry.set(doc.did,doc);_renderRegistry();
+    const sent=broadcast({type:'BIRTH_CERT',payload:doc});
+    _log(`Birth certificate broadcast to ${sent} peer(s)`,sent>0?'ok':'warn');
+    if(sent===0)_log('No connected peers — certificate stored locally','info');
+  }
+
+  function _renderPeers(){
+    const el=document.getElementById('peer-list');if(!el)return;
+    if(!_conns.size){
+      el.innerHTML='<span style="font-size:10px;color:var(--text3);">No peers connected</span>';
+      return;
+    }
+    el.innerHTML='';
+    _conns.forEach((c,id)=>{
+      const ch=document.createElement('div');
+      ch.className='peer-chip'+(c.open?' live':'');
+      ch.textContent=id.substr(0,32)+(id.length>32?'…':'');
+      el.appendChild(ch);
+    });
+  }
+
+  function _renderRegistry(){
+    const el=document.getElementById('peer-registry');if(!el)return;
+    if(!_registry.size){
+      el.innerHTML='<div style="color:var(--text3);font-size:11px;">No certificates received.</div>';
+      return;
+    }
+    el.innerHTML='';
+    _registry.forEach(d=>{
+      const div=document.createElement('div');div.className='card';
+      div.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:12px;color:var(--cyan);font-weight:600;">${d.username}</div>
+            <div class="hash" style="margin-top:2px;">${d.did}</div>
+          </div>
+          <div style="font-size:9px;color:var(--text3);">${new Date(d.createdAt).toLocaleString()}</div>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:6px;">keccak: ${d.keccakStateHash||'—'} · ${d.entropySteps||0} sponge steps</div>
+      `;
+      el.appendChild(div);
+    });
+  }
+
+  // Load peer registry from IDB on startup
+  async function loadRegistryFromIDB(){
+    try{
+      const db=await IdentityEngine.openDB();
+      const all=await new Promise((res,rej)=>{
+        const tx=db.transaction('registry','readonly');
+        const r=tx.objectStore('registry').getAll();
+        r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+      });
+      (all||[]).forEach(d=>_registry.set(d.did,d));
+      _renderRegistry();
+    }catch(e){console.warn('P2P registry IDB load failed:',e);}
+  }
+
+  return{init,connect,broadcastBirth,broadcast,loadRegistryFromIDB};
+})();
+window.P2PNet=P2PNet;
+
+
+// ══════════════════════════════════════════════════════════
+// AI WITNESS — Ollama local LLM · auto-binds on identity load
+// ══════════════════════════════════════════════════════════
+const AIWitness = (() => {
+  let _id=null,_history=[],_bound=false;
+
+  function _url(){return(document.getElementById('ollama-url')?.value||'http://localhost:11434').replace(/\/$/,'');}
+  function _model(){
+    const s=document.getElementById('ollama-model');
+    if(s?.value==='custom')return document.getElementById('ollama-model-custom')?.value?.trim()||'llama3.2';
+    return s?.value||'llama3.2';
+  }
+
+  function _log(msg,cls='info'){
+    const el=document.getElementById('ai-log');if(!el)return;
+    const d=document.createElement('div');d.className='ll '+cls;d.textContent='[WITNESS] '+msg;
+    el.appendChild(d);el.scrollTop=el.scrollHeight;
+  }
+
+  function _setStatus(msg,ok){
+    const el=document.getElementById('ollama-status');
+    if(el){el.textContent=msg;el.style.color=ok?'var(--green)':'var(--red)';}
+  }
+
+  async function testConn(){
+    const base=_url();_setStatus('checking…',true);_log(`Testing ${base}`,'info');
+    try{
+      const r=await fetch(`${base}/api/tags`);
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const data=await r.json();
+      const models=(data.models||[]).map(m=>m.name);
+      _setStatus(`✓ ${models.length} model(s)`,true);
+      _log(`Connected · models: ${models.slice(0,5).join(', ')}${models.length>5?'…':''}`,'ok');
+      const sel=document.getElementById('ollama-model');
+      if(sel&&models.length){
+        const existing=new Set([...sel.options].map(o=>o.value));
+        models.forEach(m=>{
+          if(!existing.has(m)){
+            const o=document.createElement('option');o.value=m;o.textContent=m;
+            sel.insertBefore(o,sel.querySelector('option[value="custom"]'));
+          }
+        });
+        if(!new Set(models).has(sel.value)&&models.length)sel.value=models[0];
+      }
+      const ml=document.getElementById('ollama-models');
+      if(ml)ml.textContent='Installed: '+models.join(' · ');
+      return models;
+    }catch(e){
+      _setStatus(`✗ ${e.message}`,false);
+      _log(`Offline — run: OLLAMA_ORIGINS="*" ollama serve`,'err');
+      return[];
+    }
+  }
+
+  async function _invoke(prompt){
+    if(!_id)return'No identity registered.';
+    const base=_url();const model=_model();
+    _history.push({role:'user',content:prompt});
+    const sys=`You are the AI witness bound to sovereign identity ${_id.did} (${_id.username}).
+Keccak entropy: ${_id.entropySteps} sponge steps, state hash ${_id.keccakStateHash}.
+Born: ${new Date(_id.createdAt).toISOString()}.
+Architecture: self-hosted, no blockchain, no cloud, no oracle. Entropy from KeccakBlackBox Engine. Shamir 3-of-5 recovery.
+You run locally on Ollama. Be direct, precise, occasionally poetic. No bullet lists.`;
+    const body={model,messages:[{role:'system',content:sys},..._history],stream:true,options:{temperature:0.7,num_predict:700}};
+    const el=document.getElementById('ai-response');
+    try{
+      const res=await fetch(`${base}/api/chat`,{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+      });
+      if(!res.ok){const err=await res.text();throw new Error(`Ollama ${res.status}: ${err.substr(0,80)}`);}
+      const reader=res.body.getReader();const dec=new TextDecoder();
+      let full='';el.textContent='';
+      while(true){
+        const{done,value}=await reader.read();if(done)break;
+        const lines=dec.decode(value,{stream:true}).split('\n').filter(Boolean);
+        for(const line of lines){
+          try{const c=JSON.parse(line);const t=c?.message?.content||'';full+=t;el.textContent=full;if(c.done)break;}catch{}
+        }
+      }
+      _history.push({role:'assistant',content:full});
+      return full||'(empty response)';
+    }catch(e){
+      const m=`Witness offline (${e.message}).\nRun: OLLAMA_ORIGINS="*" ollama serve`;
+      el.textContent=m;_log(e.message,'err');return m;
+    }
+  }
+
+  // Bind witness to identity — can be called automatically or by user
+  async function bind(id){
+    _id=id;_bound=true;
+    const wc=document.getElementById('witness-card');
+    if(wc)wc.innerHTML=`
+      <div style="font-size:9px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px;">AI WITNESS — Ollama · local · sovereign</div>
+      <div style="font-size:18px;font-weight:800;color:var(--purple);">⬡ ${id.username}-witness</div>
+      <div class="hash" style="margin-top:4px;">witness:${id.did.substr(-12)}</div>
+      <div style="font-size:9px;color:var(--green);margin-top:6px;">● Bound at birth · Keccak lineage · model: <span id="wm-label">${_model()}</span></div>
+    `;
+    _log(`Witness bound to ${id.username} (${id.did.substr(0,20)}…)`,'ok');
+  }
+
+  // Called by user button — binds + invokes birth greeting
+  async function register(){
+    const id=IdentityEngine.get();
+    if(!id){showModal('AI Witness','Generate identity first');return;}
+    await bind(id);
+    const models=await testConn();
+    if(!models.length){
+      const el=document.getElementById('ai-response');
+      if(el)el.textContent=`Witness bound but Ollama is unreachable.\n\nStart Ollama:\n  OLLAMA_ORIGINS="*" ollama serve\n\nPull a model:\n  ollama pull llama3.2\n\nYour identity is established. Witness awakens when Ollama is online.`;
+      _log('Witness dormant — Ollama offline','warn');
+      return;
+    }
+    const el=document.getElementById('ai-response');
+    if(el)el.innerHTML='<span class="ai-thinking">Witness awakening…</span>';
+    await _invoke(
+      `You have just been registered as AI witness for this sovereign identity.\nDID: ${id.did}\nUsername: ${id.username}\nBorn: ${new Date(id.createdAt).toISOString()}\nEntropy: KeccakBlackBox · ${id.entropySteps} absorb steps · state ${id.keccakStateHash}\nRecovery: Shamir 3-of-5\nNo blockchain. No cloud. No oracle.\nAcknowledge the birth. Direct. Minimal. No lists.`
+    );
+    _log('Witness initialized','ok');
+  }
+
+  // Auto-bind silently if identity already exists — no LLM call, just UI update
+  async function autoBindIfIdentity(){
+    const id=IdentityEngine.get();
+    if(id&&!_bound){await bind(id);}
+  }
+
+  async function ask(){
+    const input=document.getElementById('ai-prompt');
+    const prompt=input?.value.trim();if(!prompt)return;
+    input.value='';
+    const el=document.getElementById('ai-response');
+    if(el)el.innerHTML='<span class="ai-thinking">…</span>';
+    _log(`→ "${prompt.substr(0,60)}${prompt.length>60?'…':''}"`, 'info');
+    await _invoke(prompt);
+    _log('← Done','ok');
+  }
+
+  function init(){
+    const sel=document.getElementById('ollama-model');
+    const cw=document.getElementById('custom-model-wrap');
+    if(sel&&cw)sel.addEventListener('change',()=>{cw.style.display=sel.value==='custom'?'block':'none';});
+  }
+
+  return{testConn,register,autoBindIfIdentity,ask,init,isBound:()=>_bound};
+})();
+window.AIWitness=AIWitness;
+
+
+// ══════════════════════════════════════════════════════════
+// FLOW CONTROL — Birth Certificate Steps
+// ══════════════════════════════════════════════════════════
+let _birthStep=0;
+let _identity=null;
+
+function birthStep(n){
+  for(let i=0;i<=3;i++){
+    const si=document.getElementById('s-'+i);
+    const sc=document.getElementById('sec-'+i);
+    if(si)si.className='step'+(i<n?' done':i===n?' active':'');
+    if(sc)sc.className='sec'+(i===n?' active':'');
+  }
+  _birthStep=n;
+}
+window.birthStep=birthStep;
+
+async function doGenerateIdentity(){
+  birthStep(1);
+  const seed=KeccakEngine.getFinalSeed();
+  _identity=await IdentityEngine.generateFromSeed(seed);
+  const el=document.getElementById('cert-display');
+  el.innerHTML=`
+    <div class="did-card">
+      <div style="font-size:8px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Sovereign Identity · Birth Certificate</div>
+      <div class="did-username">${_identity.username}</div>
+      <div class="did-str">${_identity.did}</div>
+      <div class="did-meta">⬡ Born ${new Date(_identity.createdAt).toISOString()} · ${_identity.entropySteps} sponge steps · ${_identity.keccakStateHash}</div>
+    </div>
+    <div class="row">
+      <div class="field"><label>DID</label><input readonly value="${_identity.did}"></div>
+      <div class="field"><label>Username</label><input readonly value="${_identity.username}"></div>
+    </div>
+    <div class="field"><label>Public Key (Ed25519 SPKI Hex)</label><input readonly value="${_identity.pubKeyHex.substr(0,64)}…"></div>
+    <div class="card">
+      <div style="font-size:9px;color:var(--cyan);">KeccakBlackBox · ${_identity.entropySteps} absorb steps</div>
+      <div class="hash" style="margin-top:3px;">State: ${_identity.keccakStateHash}</div>
+    </div>
+  `;
+  _refreshNavIdentity(_identity);
+  refreshVaultTab(_identity);
+}
+window.doGenerateIdentity=doGenerateIdentity;
+
+async function doRecoverySetup(){
+  if(!_identity)return;
+  birthStep(2);
+  ShamirRecovery.generate(_identity.privKeyHex);
+}
+window.doRecoverySetup=doRecoverySetup;
+
+function doConfirm(){
+  if(!_identity)return;
+  birthStep(3);
+  const fp=document.getElementById('final-cert-panel');fp.style.display='block';
+  document.getElementById('final-cert-content').innerHTML=`
+    <div class="did-card" style="margin-bottom:12px;">
+      <div style="font-size:8px;color:var(--text3);margin-bottom:4px;">SOVEREIGN IDENTITY — ESTABLISHED</div>
+      <div class="did-username">${_identity.username}</div>
+      <div class="did-str">${_identity.did}</div>
+      <div class="did-meta">⬡ ${new Date(_identity.createdAt).toISOString()}</div>
+    </div>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;">
+        <div><span class="status-dot live" style="display:inline-block;margin-right:5px;"></span>Keccak entropy collected</div>
+        <div><span class="status-dot live" style="display:inline-block;margin-right:5px;"></span>Ed25519 keypair generated</div>
+        <div><span class="status-dot live" style="display:inline-block;margin-right:5px;"></span>DID anchored locally</div>
+        <div><span class="status-dot live" style="display:inline-block;margin-right:5px;"></span>Shamir 3-of-5 shares created</div>
+        <div><span class="status-dot live" style="display:inline-block;margin-right:5px;"></span>Key encrypted to IDB</div>
+        <div><span class="status-dot live" style="display:inline-block;margin-right:5px;"></span>Birth certificate complete</div>
+      </div>
+    </div>
+  `;
+}
+window.doConfirm=doConfirm;
+
+// ══════════════════════════════════════════════════════════
+// TAB SWITCHING — with on-enter hooks
+// ══════════════════════════════════════════════════════════
+const _tabOnEnter = {
+  governance: ()=>{ Governance.loadFromIDB(); },
+  assets:     ()=>{ Assets.loadFromIDB(); },
+  network:    ()=>{ /* nothing extra needed */ },
+  witness:    ()=>{ AIWitness.autoBindIfIdentity().then(()=>{ if(!AIWitness.isBound())return; AIWitness.testConn(); }); },
+  identity:   ()=>{ if(_identity)loadStoredIdentities(); },
+  feed:       ()=>{ FeedMailbox.loadFromIDB(); },
+};
+
+function switchTab(name){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  const tabMap={birth:'tab-birth',identity:'tab-identity',governance:'tab-governance',assets:'tab-assets',network:'tab-network',witness:'tab-witness',feed:'tab-feed'};
+  const el=document.getElementById(tabMap[name]);if(el)el.classList.add('active');
+  const tabs=[...document.querySelectorAll('.nav-tab')];
+  const idx=['birth','identity','governance','assets','network','witness','feed'].indexOf(name);
+  if(tabs[idx])tabs[idx].classList.add('active');
+  if(_tabOnEnter[name])_tabOnEnter[name]();
+}
+window.switchTab=switchTab;
+
+// ══════════════════════════════════════════════════════════
+// VAULT TAB REFRESH
+// ══════════════════════════════════════════════════════════
+function refreshVaultTab(id){
+  if(!id)return;
+  const vd=document.getElementById('vault-display');
+  if(vd)vd.innerHTML=`
+    <div class="did-card">
+      <div style="font-size:8px;color:var(--text3);margin-bottom:4px;">ACTIVE IDENTITY</div>
+      <div class="did-username">${id.username}</div>
+      <div class="did-str">${id.did}</div>
+      <div class="did-meta">⬡ ${new Date(id.createdAt).toISOString()}</div>
+    </div>
+  `;
+  const vk=document.getElementById('vault-pubkey');if(vk)vk.value=id.pubKeyHex;
+  const vki=document.getElementById('vault-keccak-info');
+  if(vki)vki.textContent=`${id.entropySteps} absorb steps · State: ${id.keccakStateHash}`;
+}
+
+async function loadStoredIdentities(){
+  try{
+    const db=await IdentityEngine.openDB();
+    const all=await new Promise((res,rej)=>{
+      const tx=db.transaction('identities','readonly');
+      const r=tx.objectStore('identities').getAll();
+      r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+    });
+    const el=document.getElementById('stored-ids');if(!el)return;
+    if(!all||!all.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;">No stored identities.</div>';return;}
+    el.innerHTML='';
+    all.slice().sort((a,b)=>b.createdAt-a.createdAt).forEach(id=>{
+      const d=document.createElement('div');d.className='card';
+      d.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:12px;color:var(--cyan);font-weight:600;">${id.username}</div>
+            <div class="hash" style="margin-top:2px;">${id.did}</div>
+          </div>
+          <div style="font-size:9px;color:var(--text3);">${new Date(id.createdAt).toLocaleString()}</div>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:4px;">${id.entropySteps||0} sponge steps · keccak: ${id.keccakStateHash||'—'}</div>
+      `;
+      el.appendChild(d);
+    });
+  }catch(e){console.error('loadStoredIdentities:',e);}
+}
+window.loadStoredIdentities=loadStoredIdentities;
+
+// ══════════════════════════════════════════════════════════
+// NAV IDENTITY CHIP
+// ══════════════════════════════════════════════════════════
+function _refreshNavIdentity(id){
+  const chip=document.getElementById('nav-id-chip');
+  const dot=document.getElementById('nav-dot');
+  if(chip){chip.textContent=id.username;chip.classList.add('live');}
+  if(dot)dot.classList.add('live');
+}
+
+// ══════════════════════════════════════════════════════════
+// EXPORT / IMPORT
+// ══════════════════════════════════════════════════════════
+window.exportCert=async function(){
+  const id=_identity||IdentityEngine.get();if(!id)return;
+  const shares=ShamirRecovery.getShares();
+  const cert={
+    version:'2.2',did:id.did,username:id.username,pubKeyHex:id.pubKeyHex,
+    createdAt:id.createdAt,keccakStateHash:id.keccakStateHash,entropySteps:id.entropySteps,
+    shamirShares:shares.map((s,i)=>({shareIndex:i+1,shareHex:ShamirRecovery.toHex(s)})),
+    note:'Private key excluded. Recover via any 3 of 5 Shamir shares. Store shares separately.'
+  };
+  const blob=new Blob([JSON.stringify(cert,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`sovereign-cert-${id.username}.json`;a.click();
+};
+
+window.importCert=function(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const cert=JSON.parse(e.target.result);
+      showModal('Certificate Imported',
+        `Username: ${cert.username}\nDID: ${cert.did}\nBorn: ${new Date(cert.createdAt).toLocaleString()}\nShares: ${(cert.shamirShares||[]).length} of 5\n\nPrivate key not included. Reconstruct via any 3 Shamir shares.`
+      );
+    }catch(err){showModal('Import Error',err.message);}
+  };
+  reader.readAsText(file);
+};
+
+// ══════════════════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════════════════
+window.showModal=function(title,body){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').textContent=body;
+  document.getElementById('modal').classList.add('open');
+};
+window.closeModal=()=>document.getElementById('modal').classList.remove('open');
+
+// ══════════════════════════════════════════════════════════
+// BOOT — async startup chain
+// ══════════════════════════════════════════════════════════
+window.addEventListener('load',async()=>{
+  KeccakEngine.initDisplay();
+  AIWitness.init();
+
+  try{
+    // 1. Restore identity from IDB
+    const db=await IdentityEngine.openDB();
+    const allIds=await new Promise((res,rej)=>{
+      const tx=db.transaction('identities','readonly');
+      const r=tx.objectStore('identities').getAll();
+      r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+    });
+
+    if(allIds&&allIds.length){
+      const last=allIds.sort((a,b)=>b.createdAt-a.createdAt)[0];
+      _identity=last;
+      _refreshNavIdentity(last);
+      refreshVaultTab(last);
+
+      // 2. Load governance + assets + feed in parallel
+      await Promise.all([
+        Governance.loadFromIDB(),
+        Assets.loadFromIDB(),
+        P2PNet.loadRegistryFromIDB(),
+        FeedMailbox.loadFromIDB(),
+      ]);
+
+      // 3. Auto-bind witness (no LLM call — just UI update)
+      await AIWitness.autoBindIfIdentity();
+    }
+  }catch(e){
+    console.warn('Boot IDB restore failed:',e);
+  }
+
+  // Passive mouse entropy accumulation
+  let _mmBuf=[];
+  window.addEventListener('mousemove',e=>{
+    _mmBuf.push(e.clientX&0xff,e.clientY&0xff);
+    if(_mmBuf.length>=32){_mmBuf=[];}  // just collect passively, entropy available for next generation
+  },{passive:true});
+});
+</script>
+</body>
+</html>
