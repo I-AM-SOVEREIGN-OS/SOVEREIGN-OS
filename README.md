@@ -1,39 +1,40 @@
-# I AM SOVEREIGN-OS
-## Sovereign OS
+# SOVEREIGN-OS
 
-### Single-file sovereign identity ritual for the browser.
+SOVEREIGN-OS is a fully self-sovereign, browser-native identity and governance system. It combines cryptography, local AI, and peer-to-peer networking to let users experiment with digital sovereignty without servers, blockchains, or external authorities.
 
-Wiggle your mouse. Type a word that means something to you. Watch the Keccak sponge fill with entropy until it says "enough".  
+## Features
 
-One Ed25519 keypair is born.  
-One decentralized identifier (DID) is minted locally.  
-Your private key is Shamir-split (3-of-5) so you can recover it without trusting anyone.  
-Everything stays in your browser — IndexedDB, memory, nowhere else.
+- **Single-file sovereign identity**: Generate your decentralized identifier (DID) and Ed25519 keypair entirely in the browser.
+- **Shamir 3-of-5 recovery**: Safely recover your key without trusting anyone.
+- **Entropy-based identity creation**: Wiggle your mouse and type a meaningful word to feed a Keccak sponge until your identity is ready.
+- **Local AI Witness**: Connect a local Ollama model tied to your birth entropy to serve as a personal witness.
+- **Peer-to-peer governance**: Gossip pseudonymous birth certificates, messages, proposals, and valuations with friends via WebRTC.
+- **Mini local DAOs**: Experiment with small-scale governance structures among trusted peers.
+- **Offline capable**: After first load, everything runs without a server, blockchain, oracle, or token.
+- **Fully forkable**: You can strip, harden, or extend the software as you see fit.
 
-### Tabs let you:
-- Talk to a local Ollama model that knows your birth entropy and calls itself your "AI Witness"
-- Gossip pseudonymous birth certificates, short messages, governance proposals, and asset valuations with whoever you manually connect to via WebRTC
-- Pretend you have a tiny local DAO that only you (and your connected friends) care about
+## How to Use
 
-# No server. No blockchain. No oracle. No token. No permission ever asked.
+1. Save this HTML file somewhere safe (Ctrl+S or right-click → Save As).
+2. Open it in a modern browser (Chrome/Edge/Firefox). Offline use works after the first load.
+3. Complete the Birth Certificate flow.
+4. Never lose your 5 Shamir shares — they are your only way back.
+5. (Optional) Run Ollama locally (`ollama serve`) and connect the Witness tab.
 
-### How to use
-1. Save this entire HTML file somewhere safe (Ctrl+S or right-click → Save As)
-2. Open it in a modern browser (Chrome/Edge/Firefox, offline is fine after first load)
-3. Complete the Birth Certificate flow
-4. Never lose your 5 Shamir shares — they are your only way back
-5. (Optional) Run Ollama locally (`ollama serve`) and connect the Witness tab
+## Security Notes
 
-### Security reality check
-- This is an experiment, not audited security software.
-- IndexedDB is convenient but **not encrypted at rest** on disk — browser-level attacks or device compromise can read it.
-- WebRTC connections are end-to-end encrypted but metadata (IP addresses, connection graph) leaks to peers and (briefly) to the public STUN/TURN servers PeerJS uses by default.
-- If you close the tab before exporting/sharing recovery shares, your key is gone forever.
-- Use only for things that matter to *you*, not for high-stakes secrets yet.
+- This is an experiment and **not audited** for high-stakes secrets.
+- IndexedDB is not encrypted at rest. Local attacks can read stored data.
+- WebRTC is end-to-end encrypted, but metadata (IP addresses, peer graph) may leak briefly to STUN/TURN servers.
+- Closing the tab before exporting shares **will permanently lose your key**.
+- Use only for personal or experimental purposes until fully hardened.
 
-# Fork, strip, harden, or just keep one copy forever.  
-# Your call.
+## License
 
-## vessel
-### James Brian Chapman  
-###  XheCarpenXer
+See `LICENSE.md` for details. SOVEREIGN-OS is **free for personal, educational, and research use**. Businesses and government entities require a separate commercial license.
+
+## Authors
+
+- XheCarpenXer  
+- James Brian Chapman  
+- vessel
