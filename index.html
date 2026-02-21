@@ -6,16 +6,15 @@
      All other directives are tightened: no eval, no external scripts, minimal connect surface. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
-  script-src 'self' 'unsafe-inline';
+  script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' http://localhost:11434 https://0.peerjs.com wss://0.peerjs.com;
+  connect-src 'self' http://localhost:11434 https://0.peerjs.com wss://0.peerjs.com https://*.peerjs.com wss://*.peerjs.com;
   img-src 'self' data: blob:;
   worker-src blob:;
   object-src 'none';
   base-uri 'none';
   form-action 'none';
-  frame-ancestors 'none';
   upgrade-insecure-requests;
 ">
 <title>SOVEREIGN OS — Unified Control Plane</title>
@@ -336,6 +335,25 @@ label{font-size:9px;color:var(--text2);display:block;margin-bottom:4px;text-tran
 .sys-title{font-size:26px;font-weight:800;color:var(--cyan);letter-spacing:2px;}
 .sys-sub{font-size:11px;color:var(--text2);margin-top:4px;font-family:var(--mono);}
 </style>
+<script>
+/* PeerJS — loaded eagerly so CSP allows it and it's ready before P2PNet.init() */
+(function(){
+  function tryLoad(urls, i){
+    if(i>=urls.length){console.error('[P2P] Failed to load PeerJS from all sources');return;}
+    var s=document.createElement('script');
+    s.src=urls[i];
+    s.onload=function(){console.log('[P2P] PeerJS loaded from '+urls[i]);};
+    s.onerror=function(){console.warn('[P2P] Failed: '+urls[i]);tryLoad(urls,i+1);};
+    document.head.appendChild(s);
+  }
+  if(!window.Peer){
+    tryLoad([
+      'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js',
+      'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'
+    ], 0);
+  }
+})();
+</script>
 </head>
 <body>
 
@@ -2700,34 +2718,74 @@ const P2PNet = (() => {
   function _peerId(did){return'sovereign-'+did.replace(/[^a-z0-9]/gi,'').substr(0,40).toLowerCase();}
 
   async function init(){
-    if(_peer){_log('Already online: '+_peer.id,'ok');return;}
+    if(_peer&&!_peer.destroyed){_log('Already online · Peer ID: '+_peer.id,'ok');return;}
     const id=IdentityEngine.get();
-    if(!id){_log('Generate identity first','warn');return;}
+    if(!id){_log('Generate identity first — no active identity found','warn');return;}
+
+    // Wait for PeerJS to load (it was injected eagerly in <head>)
     if(!window.Peer){
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
-        s.onload=res;
-        s.onerror=()=>{
-          const s2=document.createElement('script');
-          s2.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-          s2.onload=res;s2.onerror=rej;
-          document.head.appendChild(s2);
-        };
-        document.head.appendChild(s);
+      _log('Waiting for PeerJS library…','info');
+      const loaded = await new Promise(res=>{
+        let attempts=0;
+        const check=setInterval(()=>{
+          attempts++;
+          if(window.Peer){clearInterval(check);res(true);}
+          if(attempts>40){clearInterval(check);res(false);} // 4s timeout
+        },100);
       });
+      if(!loaded){
+        _log('PeerJS failed to load — check your internet connection and try again','err');
+        _log('Network may be blocking cdnjs.cloudflare.com or unpkg.com','warn');
+        return;
+      }
     }
+
     const pid=_peerId(id.did);
+    _log(`Connecting to PeerJS broker as: ${pid}…`,'info');
     document.getElementById('my-peer-id').value=pid;
-    // Try self-hosted first, fall back to public broker
-    _peer=new Peer(pid);
-    _peer.on('open',i=>{
-      _log(`Online · Peer ID: ${i}`,'ok');
-      document.getElementById('my-peer-id').value=i;
+
+    // Destroy any stale peer
+    if(_peer){try{_peer.destroy();}catch(_){} _peer=null;}
+
+    _peer=new Peer(pid,{
+      host:'0.peerjs.com',
+      port:443,
+      path:'/',
+      secure:true,
+      debug:0,
+      config:{iceServers:[
+        {urls:'stun:stun.l.google.com:19302'},
+        {urls:'stun:stun1.l.google.com:19302'}
+      ]}
     });
-    _peer.on('connection',c=>{_log(`Incoming connection: ${c.peer}`,'info');_setup(c);});
+
+    _peer.on('open',i=>{
+      _log('Online ✓ · Peer ID: '+i,'ok');
+      const el=document.getElementById('my-peer-id');if(el)el.value=i;
+    });
+    _peer.on('connection',conn=>{
+      _log('Incoming connection: '+conn.peer,'info');
+      _setup(conn);
+    });
+    _peer.on('disconnected',()=>{
+      _log('Disconnected from broker — attempting reconnect…','warn');
+      if(_peer&&!_peer.destroyed)_peer.reconnect();
+    });
     _peer.on('error',e=>{
-      _log(`Error: ${e.type} — ${e.message||''}`, e.type==='unavailable-id'?'warn':'err');
+      const msg=e.message||String(e);
+      if(e.type==='unavailable-id'){
+        _log('Peer ID taken — trying with suffix…','warn');
+        const pid2=pid+'-'+(Math.random()*900+100|0);
+        if(_peer){try{_peer.destroy();}catch(_){} _peer=null;}
+        _peer=new Peer(pid2);
+        _peer.on('open',i=>{_log('Online ✓ (alt ID): '+i,'ok');const el=document.getElementById('my-peer-id');if(el)el.value=i;});
+        _peer.on('connection',conn=>{_log('Incoming: '+conn.peer,'info');_setup(conn);});
+        _peer.on('error',e2=>_log('Error: '+e2.type+' — '+(e2.message||''),'err'));
+      } else if(e.type==='network'||e.type==='server-error'){
+        _log('Broker unreachable ('+e.type+') — are you online?','err');
+      } else {
+        _log('Error: '+e.type+' — '+msg,'err');
+      }
     });
   }
 
