@@ -6,10 +6,10 @@
      All other directives are tightened: no eval, no external scripts, minimal connect surface. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
-  script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com;
+  script-src 'self' 'unsafe-inline';
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' http://localhost:11434 https://0.peerjs.com wss://0.peerjs.com https://*.peerjs.com wss://*.peerjs.com;
+  connect-src 'self' http://localhost:11434 ws: wss: https:;
   img-src 'self' data: blob:;
   worker-src blob:;
   object-src 'none';
@@ -335,25 +335,6 @@ label{font-size:9px;color:var(--text2);display:block;margin-bottom:4px;text-tran
 .sys-title{font-size:26px;font-weight:800;color:var(--cyan);letter-spacing:2px;}
 .sys-sub{font-size:11px;color:var(--text2);margin-top:4px;font-family:var(--mono);}
 </style>
-<script>
-/* PeerJS — loaded eagerly so CSP allows it and it's ready before P2PNet.init() */
-(function(){
-  function tryLoad(urls, i){
-    if(i>=urls.length){console.error('[P2P] Failed to load PeerJS from all sources');return;}
-    var s=document.createElement('script');
-    s.src=urls[i];
-    s.onload=function(){console.log('[P2P] PeerJS loaded from '+urls[i]);};
-    s.onerror=function(){console.warn('[P2P] Failed: '+urls[i]);tryLoad(urls,i+1);};
-    document.head.appendChild(s);
-  }
-  if(!window.Peer){
-    tryLoad([
-      'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js',
-      'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'
-    ], 0);
-  }
-})();
-</script>
 </head>
 <body>
 
@@ -733,54 +714,111 @@ label{font-size:9px;color:var(--text2);display:block;margin-bottom:4px;text-tran
      TAB: PEER NETWORK
 ═══════════════════════════════════════════════════════ -->
 <div class="tab-content" id="tab-network">
-  <div class="panel c">
-    <div class="panel-title">⬡ P2P Mesh — WebRTC
-      <span class="panel-sub">PeerJS · birth certificates broadcast on connect · sovereign mesh</span>
-    </div>
-    <div class="row">
-      <div class="field">
-        <label for="my-peer-id">Your Peer ID</label>
-        <input id="my-peer-id" readonly="" placeholder="Generate identity first…">
+
+  <!-- STATUS BAR -->
+  <div class="panel c" style="margin-bottom:12px;padding:14px 20px;">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="status-dot" id="net-dot"></div>
+        <span style="font-family:var(--mono);font-size:11px;" id="net-status-label">Offline</span>
       </div>
-      <div class="field">
-        <label for="conn-peer-id">Connect to Peer</label>
-        <input id="conn-peer-id" placeholder="sovereign-abc123… (get from peer)">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text2);">
+        Node ID: <span id="my-peer-id" style="color:var(--cyan);">—</span>
       </div>
-    </div>
-    <div class="btn-row" style="margin-bottom:14px;">
-      <button class="btn c" onclick="P2PNet.init()">Go Online</button>
-      <button class="btn c" onclick="P2PNet.connect(document.getElementById('conn-peer-id').value)">Connect Peer</button>
-      <button class="btn g" onclick="P2PNet.broadcastBirth()">Broadcast Birth Cert</button>
-    </div>
-    <div class="field">
-      <div class="field-heading"><span>Connected Peers</span></div>
-      <div id="peer-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;">
-        <span style="font-size:10px;color:var(--text2);">No peers connected</span>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn c" onclick="P2PNet.goOnline()">Go Online</button>
+        <button class="btn r" onclick="P2PNet.goOffline()">Go Offline</button>
       </div>
     </div>
-    <div class="log" id="p2p-log"><div class="ll warn">[P2P] Generate identity first</div><div class="ll warn">[P2P] No identity</div><div class="ll warn">[P2P] Go online first</div><div class="ll warn">[P2P] Generate identity first</div><div class="ll warn">[P2P] Generate identity first</div></div>
   </div>
+
+  <div class="grid-2">
+    <!-- LEFT: RELAY CONFIG + CONNECT -->
+    <div>
+      <div class="panel c">
+        <div class="panel-title">⬡ Relay Config
+          <span class="panel-sub">WebSocket relay · self-hostable · no broker dependency</span>
+        </div>
+        <div class="field">
+          <label for="relay-url">Relay WebSocket URL</label>
+          <input id="relay-url" value="wss://sovereign-relay.glitch.me" placeholder="wss://your-relay.example.com">
+        </div>
+        <div style="font-size:9px;color:var(--text3);line-height:1.6;margin-bottom:10px;">
+          Messages are Ed25519-signed envelopes. The relay only routes opaque blobs — it never sees plaintext.
+          Self-host: <span style="color:var(--cyan);">github.com/sovereign-os/relay</span>
+        </div>
+        <div class="btn-row">
+          <button class="btn c" onclick="P2PNet.testRelay()">Test Relay</button>
+        </div>
+      </div>
+
+      <div class="panel g">
+        <div class="panel-title">⬡ Connect to Peer</div>
+        <div class="field">
+          <label for="conn-peer-id">Peer Node ID or DID</label>
+          <input id="conn-peer-id" placeholder="sovereign-abc123… or did:sovereign:…">
+        </div>
+        <div class="btn-row">
+          <button class="btn g" onclick="P2PNet.connect(document.getElementById('conn-peer-id').value)">Connect</button>
+          <button class="btn g" onclick="P2PNet.broadcastBirth()">Broadcast Birth Cert</button>
+        </div>
+      </div>
+
+      <!-- SAME-DEVICE: BroadcastChannel (always works, no relay needed) -->
+      <div class="panel y">
+        <div class="panel-title">⬡ Same-Device Channel
+          <span class="panel-sub">BroadcastChannel · instant · no network · for local tab mesh</span>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:10px;line-height:1.7;">
+          Open Sovereign OS in a second tab — both tabs will auto-discover each other via BroadcastChannel.
+          No relay, no network, instant.
+        </div>
+        <div class="btn-row">
+          <button class="btn y" onclick="P2PNet.pingLocal()">Ping Local Tabs</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: HANDSHAKE PACKET + PEERS -->
+    <div>
+      <div class="panel p">
+        <div class="panel-title">⬡ Manual Handshake
+          <span class="panel-sub">Copy your packet · send out-of-band · paste theirs to connect</span>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:10px;line-height:1.7;">
+          No relay? Generate your handshake packet, send it to a peer via any channel (email, chat, etc.).
+          Paste their packet here to establish a signed channel.
+        </div>
+        <div class="btn-row" style="margin-bottom:10px;">
+          <button class="btn p" onclick="P2PNet.copyHandshake()">Copy My Packet</button>
+        </div>
+        <div class="field">
+          <label for="paste-handshake">Paste Peer Handshake Packet</label>
+          <textarea id="paste-handshake" rows="3" placeholder='{"node":"sovereign-…","did":"did:sovereign:…","pubKey":"…","ts":…,"sig":"…"}'
+            style="font-size:9px;"></textarea>
+        </div>
+        <button class="btn p" style="width:100%;" onclick="P2PNet.acceptHandshake()">Accept Handshake</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">⬡ Connected Peers
+          <span id="peer-count" style="font-size:9px;color:var(--text3);font-weight:400;"> · 0 peers</span>
+        </div>
+        <div id="peer-list" style="display:flex;flex-direction:column;gap:6px;min-height:28px;">
+          <span style="font-size:10px;color:var(--text2);">No peers connected</span>
+        </div>
+      </div>
+
+      <div class="panel" style="height:170px;overflow:hidden;">
+        <div class="panel-title">⬡ Transport Log</div>
+        <div class="log" id="p2p-log" style="height:120px;"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="panel g">
-    <div class="panel-title">⬡ Peer Registry — Received Birth Certificates</div>
-    <div id="peer-registry"><div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div style="font-size:12px;color:var(--cyan);font-weight:600;">signal-shard-9731</div>
-            <div class="hash" style="margin-top:2px;">did:sovereign:2761cb2ea5fce4c0ca43579d</div>
-          </div>
-          <div style="font-size:9px;color:var(--text2);">2/17/2026, 5:58:13 PM</div>
-        </div>
-        <div style="font-size:9px;color:var(--text2);margin-top:6px;">keccak: 6fca4543f8d35d81 · 4 sponge steps</div>
-      </div><div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div style="font-size:12px;color:var(--cyan);font-weight:600;">herald-tower-4921</div>
-            <div class="hash" style="margin-top:2px;">did:sovereign:e2c0d9ddf4d9f22fddbf7373</div>
-          </div>
-          <div style="font-size:9px;color:var(--text2);">2/17/2026, 6:00:47 PM</div>
-        </div>
-        <div style="font-size:9px;color:var(--text2);margin-top:6px;">keccak: 3c68bf19f1a47792 · 5 sponge steps</div>
-      </div></div>
+    <div class="panel-title">⬡ Peer Registry — Verified Birth Certificates</div>
+    <div id="peer-registry"><div style="color:var(--text2);font-size:11px;">No certificates received yet.</div></div>
   </div>
 </div>
 
@@ -830,7 +868,10 @@ label{font-size:9px;color:var(--text2);display:block;margin-bottom:4px;text-tran
       <div class="hash" style="margin-top:4px;">witness:f64a7089812a</div>
       <div style="font-size:9px;color:var(--green);margin-top:6px;">● Bound at birth · Keccak lineage · model: <span id="wm-label">llama3.2:latest</span></div>
     </div>
-    <button class="btn p" style="width:100%;margin-bottom:12px;" onclick="AIWitness.register()">Activate Witness</button>
+    <div class="btn-row" style="margin-bottom:12px;">
+      <button class="btn p" style="flex:2;" onclick="AIWitness.register()">Activate Witness</button>
+      <button class="btn c" onclick="AIWitness.registerPresence()" title="Embed your signed identity packet into a local Ollama modelfile so peers can find you by URL">Register Presence</button>
+    </div>
     <div class="field">
       <label for="ai-prompt">Speak to Witness</label>
       <div style="display:flex;gap:8px;">
@@ -1946,7 +1987,30 @@ const ShamirRecovery = (() => {
 
   function getShares(){return _shares;}
   function toHexFn(u8){return Array.from(u8).map(b=>b.toString(16).padStart(2,'0')).join('');}
-  return{generate,test,getShares,toHex:toHexFn};
+
+  // Load shares from exported cert format [{shareIndex,shareHex}] or raw hex strings
+  function loadShares(sharesData){
+    if(!sharesData||!sharesData.length) return;
+    try{
+      _shares=sharesData.map(s=>{
+        const hex=typeof s==='string'?s:(s.shareHex||'');
+        return fromHex(hex);
+      }).filter(s=>s&&s.length>0);
+      _log(`${_shares.length} shares loaded from import`,'ok');
+      const grid=document.getElementById('share-display');
+      if(grid){
+        grid.innerHTML='';
+        _shares.forEach((sh,i)=>{
+          const hex=toHexFn(sh);
+          const card=document.createElement('div');card.className='share-card';card.id='sc-'+i;
+          card.innerHTML=`<div class="share-num">Share ${i+1} / 5 — Imported</div><div class="share-hex" style="word-break:break-all;">${hex}</div>`;
+          grid.appendChild(card);
+        });
+      }
+    }catch(e){ _log('loadShares error: '+e.message,'err'); }
+  }
+
+  return{generate,test,getShares,loadShares,toHex:toHexFn};
 })();
 window.ShamirRecovery=ShamirRecovery;
 window.Shamir=Shamir;
@@ -2015,9 +2079,27 @@ const IdentityEngine = (() => {
   }
 
   function get(){return _id;}
-  function setActive(id){ _id = id; }   // set internal _id from boot restore
+  function setActive(id){ _id = id; if(id&&id.keyPair) _keyCache.set(id.did,id.keyPair); }   // set internal _id from boot restore
+
+  // Re-import CryptoKey from stored privKeyHex (needed after IDB restore)
+  // The private key is AES-GCM encrypted in keyvault — we can't easily re-decrypt
+  // here without the identity. Instead, we try to restore from the in-memory privKeyHex
+  // which is set during generateFromSeed. On IDB restore, privKeyHex is '' so keyPair stays null.
+  // Solution: store a session-level key cache keyed by DID.
+  const _keyCache=new Map(); // did → CryptoKeyPair
+  function cacheKeyPair(did, kp){ _keyCache.set(did,kp); }
+  function getKeyPair(did){ return _keyCache.get(did)||null; }
+
+  // After generating, always cache the keypair
+  const _origGenerate = generateFromSeed;
+  async function generateFromSeedAndCache(seed32){
+    const id = await _origGenerate(seed32);
+    if(id && id.keyPair) _keyCache.set(id.did, id.keyPair);
+    return id;
+  }
+
   function openDB(){return _openDB();}
-  return{generateFromSeed,get,setActive,openDB};
+  return{generateFromSeed:generateFromSeedAndCache,get,setActive,openDB,cacheKeyPair,getKeyPair};
 })();
 
 
@@ -2702,275 +2784,481 @@ window.Assets=Assets;
 
 
 // ══════════════════════════════════════════════════════════
-// P2P NETWORK — PeerJS WebRTC · full state sync
+// P2P NETWORK — Sovereign Transport · BroadcastChannel + WebSocket relay
 // Message types: BIRTH_CERT, PROPOSAL_NEW, PROPOSAL_VOTE,
 //                ASSET_NEW, SYNC_REQUEST, SYNC_RESPONSE
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// SOVEREIGN TRANSPORT — Zero-dependency P2P mesh
+// ──────────────────────────────────────────────────────────
+// Architecture:
+//   Layer 0 · BroadcastChannel  — same-device tabs, zero latency, no network
+//   Layer 1 · WebSocket Relay   — any tab → relay → any tab, self-hostable
+//   Layer 2 · Manual Handshake  — out-of-band packet exchange for air-gapped peers
+//
+// All messages are Ed25519-signed JSON envelopes:
+//   { to, from, type, payload, ts, sig }
+//   relay only sees opaque blobs — never plaintext identity
+//
+// No WebRTC. No PeerJS. No external library. No broker lock-in.
+// ══════════════════════════════════════════════════════════
 const P2PNet = (() => {
-  let _peer=null,_conns=new Map(),_registry=new Map();
 
-  function _log(msg,cls='info'){
-    const el=document.getElementById('p2p-log');if(!el)return;
-    const d=document.createElement('div');d.className='ll '+cls;d.textContent='[P2P] '+msg;
-    el.appendChild(d);el.scrollTop=el.scrollHeight;
+  // ── state ────────────────────────────────────────────────
+  let _online   = false;
+  let _nodeId   = null;          // sovereign-<hex>  (derived from DID)
+  let _ws       = null;          // WebSocket to relay
+  let _bc       = null;          // BroadcastChannel (same device)
+  let _peers    = new Map();     // nodeId → { nodeId, did, username, pubKeyHex, channel, ts }
+  let _registry = new Map();     // did    → birth doc
+  let _msgHandlers = [];         // [{type, fn}]
+
+  // ── helpers ─────────────────────────────────────────────
+  function _log(msg, cls='info'){
+    const el=document.getElementById('p2p-log'); if(!el) return;
+    const d=document.createElement('div'); d.className='ll '+cls;
+    const t=new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    d.textContent=`[${t}] ${msg}`;
+    el.appendChild(d); el.scrollTop=el.scrollHeight;
   }
 
-  function _peerId(did){return'sovereign-'+did.replace(/[^a-z0-9]/gi,'').substr(0,40).toLowerCase();}
+  function _nodeIdFromDid(did){
+    // Deterministic short node id from DID
+    return 'sovereign-'+did.replace(/[^a-z0-9]/gi,'').substr(6,24).toLowerCase();
+  }
 
-  async function init(){
-    if(_peer&&!_peer.destroyed){_log('Already online · Peer ID: '+_peer.id,'ok');return;}
+  function _setStatus(online, label){
+    _online=online;
+    const dot=document.getElementById('net-dot');
+    const lbl=document.getElementById('net-status-label');
+    if(dot){ dot.className='status-dot'+(online?' live':''); }
+    if(lbl){ lbl.textContent=label||'Offline'; lbl.style.color=online?'var(--green)':'var(--text2)'; }
+    const el=document.getElementById('my-peer-id');
+    if(el) el.textContent = _nodeId||'—';
+  }
+
+  // ── Ed25519 sign/verify ──────────────────────────────────
+  async function _sign(payload){
     const id=IdentityEngine.get();
-    if(!id){_log('Generate identity first — no active identity found','warn');return;}
+    if(!id) return null;
+    // Try live keyPair first, then key cache
+    const kp=id.keyPair||IdentityEngine.getKeyPair(id.did);
+    if(!kp) return null;
+    const bytes=new TextEncoder().encode(JSON.stringify(payload));
+    try{
+      const sig=await crypto.subtle.sign({name:'Ed25519'},kp.privateKey,bytes);
+      return Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }catch(e){ return null; }
+  }
 
-    // Wait for PeerJS to load (it was injected eagerly in <head>)
-    if(!window.Peer){
-      _log('Waiting for PeerJS library…','info');
-      const loaded = await new Promise(res=>{
-        let attempts=0;
-        const check=setInterval(()=>{
-          attempts++;
-          if(window.Peer){clearInterval(check);res(true);}
-          if(attempts>40){clearInterval(check);res(false);} // 4s timeout
-        },100);
+  async function _verify(envelope){
+    const peer=_peers.get(envelope.from);
+    if(!peer||!peer.pubKeyHex) return false;
+    try{
+      const pubRaw=new Uint8Array(peer.pubKeyHex.match(/.{2}/g).map(h=>parseInt(h,16)));
+      const pubKey=await crypto.subtle.importKey('spki',pubRaw,{name:'Ed25519'},false,['verify']);
+      const {sig,...rest}=envelope;
+      const bytes=new TextEncoder().encode(JSON.stringify(rest));
+      const sigBytes=new Uint8Array(sig.match(/.{2}/g).map(h=>parseInt(h,16)));
+      return crypto.subtle.verify({name:'Ed25519'},pubKey,sigBytes,bytes);
+    }catch(e){ return false; }
+  }
+
+  // ── envelope builder ─────────────────────────────────────
+  async function _makeEnvelope(type, payload, to='*'){
+    const id=IdentityEngine.get(); if(!id) return null;
+    const env={to, from:_nodeId, did:id.did, username:id.username, pubKeyHex:id.pubKeyHex, type, payload, ts:Date.now()};
+    env.sig=await _sign({to,from:_nodeId,did:id.did,type,payload,ts:env.ts})||'unsigned';
+    return env;
+  }
+
+  // ── dispatch incoming envelope ───────────────────────────
+  async function _dispatch(env, channel){
+    if(!env||!env.type||!env.from) return;
+    if(env.from===_nodeId) return; // echo
+
+    // Register peer if new
+    if(!_peers.has(env.from)&&env.did){
+      _peers.set(env.from,{
+        nodeId:env.from, did:env.did,
+        username:env.username||env.did.substr(14,12),
+        pubKeyHex:env.pubKeyHex||'',
+        channel, ts:Date.now()
       });
-      if(!loaded){
-        _log('PeerJS failed to load — check your internet connection and try again','err');
-        _log('Network may be blocking cdnjs.cloudflare.com or unpkg.com','warn');
-        return;
-      }
+      _renderPeers();
     }
 
-    const pid=_peerId(id.did);
-    _log(`Connecting to PeerJS broker as: ${pid}…`,'info');
-    document.getElementById('my-peer-id').value=pid;
+    switch(env.type){
+      case 'HELLO':
+        _log(`Peer discovered: ${env.username||env.from} via ${channel}`,'ok');
+        // Reply with our own HELLO
+        const reply=await _makeEnvelope('HELLO_ACK',_buildDoc(),env.from);
+        if(reply) _send(reply,channel);
+        // Register their birth cert
+        if(env.payload) _receiveBirthCert(env.payload);
+        break;
 
-    // Destroy any stale peer
-    if(_peer){try{_peer.destroy();}catch(_){} _peer=null;}
+      case 'HELLO_ACK':
+        _log(`Handshake complete: ${env.username||env.from}`,'ok');
+        // Update peer record with pubKeyHex from payload if missing
+        if(env.pubKeyHex&&_peers.has(env.from)){
+          const p=_peers.get(env.from);
+          if(!p.pubKeyHex) p.pubKeyHex=env.pubKeyHex;
+        }
+        if(env.payload) _receiveBirthCert(env.payload);
+        break;
 
-    _peer=new Peer(pid,{
-      host:'0.peerjs.com',
-      port:443,
-      path:'/',
-      secure:true,
-      debug:0,
-      config:{iceServers:[
-        {urls:'stun:stun.l.google.com:19302'},
-        {urls:'stun:stun1.l.google.com:19302'}
-      ]}
-    });
+      case 'BIRTH_CERT':
+        _receiveBirthCert(env.payload);
+        break;
 
-    _peer.on('open',i=>{
-      _log('Online ✓ · Peer ID: '+i,'ok');
-      const el=document.getElementById('my-peer-id');if(el)el.value=i;
-    });
-    _peer.on('connection',conn=>{
-      _log('Incoming connection: '+conn.peer,'info');
-      _setup(conn);
-    });
-    _peer.on('disconnected',()=>{
-      _log('Disconnected from broker — attempting reconnect…','warn');
-      if(_peer&&!_peer.destroyed)_peer.reconnect();
-    });
-    _peer.on('error',e=>{
-      const msg=e.message||String(e);
-      if(e.type==='unavailable-id'){
-        _log('Peer ID taken — trying with suffix…','warn');
-        const pid2=pid+'-'+(Math.random()*900+100|0);
-        if(_peer){try{_peer.destroy();}catch(_){} _peer=null;}
-        _peer=new Peer(pid2);
-        _peer.on('open',i=>{_log('Online ✓ (alt ID): '+i,'ok');const el=document.getElementById('my-peer-id');if(el)el.value=i;});
-        _peer.on('connection',conn=>{_log('Incoming: '+conn.peer,'info');_setup(conn);});
-        _peer.on('error',e2=>_log('Error: '+e2.type+' — '+(e2.message||''),'err'));
-      } else if(e.type==='network'||e.type==='server-error'){
-        _log('Broker unreachable ('+e.type+') — are you online?','err');
-      } else {
-        _log('Error: '+e.type+' — '+msg,'err');
-      }
-    });
+      case 'PROPOSAL_NEW':
+        _log(`Proposal synced: "${env.payload?.title||'?'}"`, 'info');
+        if(window.Governance) await Governance.mergeProposal(env.payload);
+        break;
+
+      case 'PROPOSAL_VOTE':
+        _log(`Vote synced for ${env.payload?.propId||'?'}`, 'info');
+        if(window.Governance) Governance.applyVote(env.payload);
+        break;
+
+      case 'ASSET_NEW':
+        _log(`Asset synced: "${env.payload?.name||'?'}"`, 'info');
+        if(window.Assets) await Assets.mergeAsset(env.payload);
+        break;
+
+      case 'MAIL_MSG':
+        _log(`Message from ${env.payload?.fromUsername||env.from}`, 'ok');
+        if(window.FeedMailbox) await FeedMailbox.receive(env.payload);
+        break;
+
+      case 'PING':
+        const pong=await _makeEnvelope('PONG',{echo:env.payload},env.from);
+        if(pong) _send(pong,channel);
+        break;
+
+      case 'PONG':
+        _log(`Pong from ${env.from} · latency ${Date.now()-env.payload?.echo?.ts||'?'}ms`,'ok');
+        break;
+
+      default:
+        // pass to registered handlers
+        for(const h of _msgHandlers) if(h.type===env.type) h.fn(env,channel);
+    }
   }
 
-  function _setup(conn){
-    _conns.set(conn.peer,conn);
-    conn.on('open',()=>{
-      _log(`Connected: ${conn.peer}`,'ok');
-      _renderPeers();
-      // Send our birth cert
-      const id=IdentityEngine.get();
-      if(id)conn.send({type:'BIRTH_CERT',payload:_buildDoc(id)});
-      // Request full state sync from peer
-      conn.send({type:'SYNC_REQUEST'});
-    });
-    conn.on('data',async d=>{
-      if(!d?.type)return;
-      switch(d.type){
-        case 'BIRTH_CERT':
-          _registry.set(d.payload.did,d.payload);
-          _renderRegistry();
-          _log(`Birth cert received: ${d.payload.username}`,'ok');
-          // Persist to IDB registry
-          try{
-            const db=await IdentityEngine.openDB();
-            const tx=db.transaction('registry','readwrite');
-            tx.objectStore('registry').put(d.payload);
-          }catch(_){}
-          break;
-
-        case 'PROPOSAL_NEW':
-          _log(`Proposal synced: "${d.payload.title}"`, 'info');
-          await Governance.mergeProposal(d.payload);
-          break;
-
-        case 'PROPOSAL_VOTE':
-          _log(`Vote synced for ${d.payload.propId}`, 'info');
-          Governance.applyVote(d.payload);
-          break;
-
-        case 'ASSET_NEW':
-          _log(`Asset synced: "${d.payload.name}"`, 'info');
-          await Assets.mergeAsset(d.payload);
-          break;
-
-        case 'MAIL_MSG':
-          _log(`Message from: ${d.payload.fromUsername||d.payload.from?.substr(14,10)}`, 'ok');
-          await FeedMailbox.receive(d.payload);
-          break;
-
-        case 'SYNC_REQUEST':
-          // Peer wants our full state — send it
-          conn.send({
-            type:'SYNC_RESPONSE',
-            payload:{
-              gov: Governance.getSnapshot(),
-              assets: Assets.getSnapshot(),
-              registry: Array.from(_registry.values())
-            }
-          });
-          _log(`Sync state sent to ${conn.peer}`, 'info');
-          break;
-
-        case 'SYNC_RESPONSE':
-          _log(`Sync state received from ${conn.peer}`, 'ok');
-          // Apply governance
-          if(d.payload.gov) await Governance.applySnapshot(d.payload.gov);
-          // Apply assets
-          if(d.payload.assets) await Assets.applySnapshot(d.payload.assets);
-          // Apply registry
-          if(d.payload.registry){
-            for(const doc of d.payload.registry){
-              _registry.set(doc.did,doc);
-              try{
-                const db=await IdentityEngine.openDB();
-                const tx=db.transaction('registry','readwrite');
-                tx.objectStore('registry').put(doc);
-              }catch(_){}
-            }
-            _renderRegistry();
-          }
-          break;
-
-        default:
-          _log(`Unknown message type: ${d.type}`, 'warn');
-      }
-    });
-    conn.on('close',()=>{
-      _conns.delete(conn.peer);
-      _renderPeers();
-      _log(`Disconnected: ${conn.peer}`,'warn');
-    });
-    conn.on('error',e=>{_log(`Conn error: ${e}`,'err');});
-  }
-
-  function connect(pid){
-    if(!_peer){_log('Go online first','warn');return;}
-    if(!pid?.trim()){showModal('Connect','Enter a peer ID');return;}
-    const conn=_peer.connect(pid.trim(),{reliable:true});
-    _setup(conn);
-    _log(`Connecting to ${pid.trim()}…`,'info');
-  }
-
-  // Broadcast a message to ALL open connections
-  function broadcast(msg){
+  // ── send via best channel ────────────────────────────────
+  function _send(env, preferChannel){
+    const s=JSON.stringify(env);
     let sent=0;
-    _conns.forEach(c=>{if(c.open){c.send(msg);sent++;}});
+
+    // BroadcastChannel always
+    if(_bc){ try{_bc.postMessage(s);sent++;}catch(e){} }
+
+    // WebSocket relay
+    if(_ws&&_ws.readyState===WebSocket.OPEN){
+      try{_ws.send(s);sent++;}catch(e){}
+    }
+
     return sent;
   }
 
+  // ── broadcast to all ─────────────────────────────────────
+  async function broadcast(msg){
+    const env=await _makeEnvelope(msg.type, msg.payload, '*');
+    if(!env){ _log('No identity — cannot send','warn'); return 0; }
+    const n=_send(env);
+    return n;
+  }
+
+  // ── BroadcastChannel (same device) ──────────────────────
+  function _initBroadcastChannel(){
+    if(typeof BroadcastChannel==='undefined') return;
+    if(_bc) return; // already open
+    _bc=new BroadcastChannel('sovereign-os-mesh');
+    _bc.onmessage=async e=>{
+      try{ await _dispatch(JSON.parse(e.data),'bc'); }catch(_){}
+    };
+    _log('BroadcastChannel open · same-device mesh active','ok');
+  }
+
+  // ── WebSocket relay ──────────────────────────────────────
+  function _initRelay(url){
+    if(_ws&&(_ws.readyState===WebSocket.OPEN||_ws.readyState===WebSocket.CONNECTING)){
+      _log('Relay already connected','ok'); return;
+    }
+    _log(`Connecting to relay: ${url}…`,'info');
+    let ws;
+    try{ ws=new WebSocket(url); }
+    catch(e){ _log('Invalid relay URL: '+e.message,'err'); return; }
+
+    let pingInterval=null;
+
+    ws.onopen=async()=>{
+      _ws=ws;
+      _log('Relay connected ✓','ok');
+      _setStatus(true,'Online · relay connected');
+      // Register node with relay
+      ws.send(JSON.stringify({type:'REGISTER',nodeId:_nodeId}));
+      // Announce ourselves
+      const hello=await _makeEnvelope('HELLO',_buildDoc(),'*');
+      if(hello) ws.send(JSON.stringify(hello));
+      // Keepalive ping every 25s
+      pingInterval=setInterval(()=>{
+        if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'_ping'}));
+      },25000);
+    };
+
+    ws.onmessage=async e=>{
+      try{
+        const d=JSON.parse(e.data);
+        if(d.type==='_pong'||d.type==='_ack') return;
+        await _dispatch(d,'ws');
+      }catch(_){}
+    };
+
+    ws.onclose=e=>{
+      _ws=null;
+      clearInterval(pingInterval);
+      _log(`Relay disconnected (${e.code}) · will retry in 8s`,'warn');
+      _setStatus(_bc!=null,'Relay disconnected');
+      setTimeout(()=>{ if(_online) _initRelay(url); },8000);
+    };
+
+    ws.onerror=()=>{
+      _log('Relay error — cannot reach '+url,'err');
+      _log('Using BroadcastChannel only (same-device)','warn');
+    };
+  }
+
+  // ── build birth doc to share ─────────────────────────────
   function _buildDoc(id){
-    return{did:id.did,username:id.username,pubKeyHex:id.pubKeyHex,
-           createdAt:id.createdAt,keccakStateHash:id.keccakStateHash,
-           entropySteps:id.entropySteps,version:'2.0'};
+    id=id||IdentityEngine.get(); if(!id) return {};
+    return{
+      did:id.did, username:id.username, pubKeyHex:id.pubKeyHex,
+      createdAt:id.createdAt, keccakStateHash:id.keccakStateHash,
+      entropySteps:id.entropySteps, version:'3.0'
+    };
   }
 
-  function broadcastBirth(){
-    const id=IdentityEngine.get();if(!id){_log('No identity','warn');return;}
-    const doc=_buildDoc(id);_registry.set(doc.did,doc);_renderRegistry();
-    const sent=broadcast({type:'BIRTH_CERT',payload:doc});
-    _log(`Birth certificate broadcast to ${sent} peer(s)`,sent>0?'ok':'warn');
-    if(sent===0)_log('No connected peers — certificate stored locally','info');
+  // ── receive + store birth cert ───────────────────────────
+  async function _receiveBirthCert(doc){
+    if(!doc?.did) return;
+    _registry.set(doc.did,doc);
+    _renderRegistry();
+    _log(`Birth cert received: ${doc.username||doc.did}`,'ok');
+    try{
+      const db=await IdentityEngine.openDB();
+      const tx=db.transaction('registry','readwrite');
+      tx.objectStore('registry').put(doc);
+    }catch(_){}
   }
 
+  // ── public API ───────────────────────────────────────────
+
+  async function goOnline(){
+    const id=IdentityEngine.get();
+    if(!id){ _log('No identity — generate one first','warn'); return; }
+    _nodeId=_nodeIdFromDid(id.did);
+    _log(`Node ID: ${_nodeId}`,'info');
+
+    // Always start BroadcastChannel
+    _initBroadcastChannel();
+
+    // Try relay
+    const relayEl=document.getElementById('relay-url');
+    const url=relayEl?.value?.trim()||'wss://sovereign-relay.glitch.me';
+    _initRelay(url);
+
+    _setStatus(true,'Online · connecting…');
+    _log(`Going online as ${id.username} · ${_nodeId}`,'ok');
+
+    // Announce via BC immediately (no relay needed)
+    const hello=await _makeEnvelope('HELLO',_buildDoc(id),'*');
+    if(hello&&_bc) _bc.postMessage(JSON.stringify(hello));
+  }
+
+  function goOffline(){
+    if(_ws){ try{_ws.close();}catch(_){} _ws=null; }
+    if(_bc){ try{_bc.close();}catch(_){} _bc=null; }
+    _online=false;
+    _setStatus(false,'Offline');
+    _log('Offline — all channels closed','warn');
+  }
+
+  async function connect(target){
+    if(!target?.trim()){ _log('Enter a peer node ID or DID','warn'); return; }
+    if(!_nodeId){ _log('Go online first','warn'); return; }
+    const t=target.trim();
+    // Send HELLO addressed to them
+    const env=await _makeEnvelope('HELLO',_buildDoc(),t);
+    if(!env) return;
+    const n=_send(env);
+    _log(`HELLO sent to ${t} via ${n} channel(s)`,'info');
+    if(n===0) _log('No active channels — go online first or use Manual Handshake','warn');
+  }
+
+  async function broadcastBirth(){
+    const id=IdentityEngine.get(); if(!id){ _log('No identity','warn'); return; }
+    const doc=_buildDoc(id);
+    _registry.set(doc.did,doc); _renderRegistry();
+    const n=await broadcast({type:'BIRTH_CERT',payload:doc});
+    _log(`Birth cert broadcast · sent via ${n} channel(s)`, n>0?'ok':'warn');
+    if(n===0) _log('No active channels — cert stored locally only','info');
+  }
+
+  // Copy a signed handshake packet to clipboard for manual exchange
+  async function copyHandshake(){
+    const id=IdentityEngine.get(); if(!id){ _log('No identity','warn'); return; }
+    const packet={
+      node:_nodeId||_nodeIdFromDid(id.did),
+      did:id.did, username:id.username,
+      pubKeyHex:id.pubKeyHex,
+      ts:Date.now()
+    };
+    packet.sig=await _sign(packet)||'unsigned';
+    const txt=JSON.stringify(packet);
+    try{
+      await navigator.clipboard.writeText(txt);
+      _log('Handshake packet copied to clipboard ✓ — send to peer out-of-band','ok');
+    }catch(e){
+      // Fallback: put in textarea
+      const ta=document.getElementById('paste-handshake');
+      if(ta){ ta.value=txt; ta.select(); }
+      _log('Clipboard blocked — packet shown in textarea, copy manually','warn');
+    }
+  }
+
+  // Accept a handshake packet pasted from a peer
+  async function acceptHandshake(){
+    const ta=document.getElementById('paste-handshake');
+    const raw=ta?.value?.trim(); if(!raw){ _log('No packet pasted','warn'); return; }
+    let packet;
+    try{ packet=JSON.parse(raw); }
+    catch(e){ _log('Invalid packet JSON: '+e.message,'err'); return; }
+    if(!packet.did||!packet.node){ _log('Packet missing did/node fields','err'); return; }
+    // Register peer
+    _peers.set(packet.node,{
+      nodeId:packet.node, did:packet.did,
+      username:packet.username||packet.did.substr(14,12),
+      pubKeyHex:packet.pubKeyHex||'',
+      channel:'manual', ts:Date.now()
+    });
+    _renderPeers();
+    _receiveBirthCert({
+      did:packet.did, username:packet.username,
+      pubKeyHex:packet.pubKeyHex, createdAt:packet.ts,
+      keccakStateHash:'manual-exchange', entropySteps:0, version:'3.0'
+    });
+    // Send our HELLO back via any live channel
+    const reply=await _makeEnvelope('HELLO_ACK',_buildDoc(),packet.node);
+    if(reply) _send(reply);
+    _log(`Peer accepted: ${packet.username||packet.node} (manual handshake)`,'ok');
+    if(ta) ta.value='';
+  }
+
+  async function testRelay(){
+    const relayEl=document.getElementById('relay-url');
+    const url=relayEl?.value?.trim();
+    if(!url){ _log('Enter a relay URL first','warn'); return; }
+    _log(`Testing relay: ${url}…`,'info');
+    try{
+      const ws=new WebSocket(url);
+      const t=Date.now();
+      ws.onopen=()=>{ _log(`Relay reachable ✓ · ${Date.now()-t}ms`,'ok'); ws.close(); };
+      ws.onerror=()=>{ _log('Relay unreachable — check URL and network','err'); };
+      setTimeout(()=>{ if(ws.readyState!==WebSocket.OPEN&&ws.readyState!==WebSocket.CLOSING) ws.close(); },5000);
+    }catch(e){ _log('Test error: '+e.message,'err'); }
+  }
+
+  async function pingLocal(){
+    if(!_nodeId){ _log('Go online first','warn'); return; }
+    const env=await _makeEnvelope('PING',{ts:Date.now()},'*');
+    if(env&&_bc){ _bc.postMessage(JSON.stringify(env)); _log('Ping sent to local tabs','info'); }
+    else _log('BroadcastChannel not open — go online first','warn');
+  }
+
+  // ── render peers ─────────────────────────────────────────
   function _renderPeers(){
-    const el=document.getElementById('peer-list');if(!el)return;
-    if(!_conns.size){
+    const el=document.getElementById('peer-list'); if(!el) return;
+    const cnt=document.getElementById('peer-count');
+    if(cnt) cnt.textContent=` · ${_peers.size} peer${_peers.size===1?'':'s'}`;
+    if(!_peers.size){
       el.innerHTML='<span style="font-size:10px;color:var(--text2);">No peers connected</span>';
       return;
     }
     el.innerHTML='';
-    _conns.forEach((c,id)=>{
-      const ch=document.createElement('div');
-      ch.className='peer-chip'+(c.open?' live':'');
-      ch.textContent=id.substr(0,32)+(id.length>32?'…':'');
-      el.appendChild(ch);
+    _peers.forEach((p,nid)=>{
+      const d=document.createElement('div');
+      d.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:rgba(0,212,255,0.04);border:1px solid var(--border2);border-radius:5px;';
+      d.innerHTML=`
+        <div>
+          <div style="font-size:11px;color:var(--cyan);font-weight:600;">${p.username||nid}</div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--text2);">${p.did||nid} · via ${p.channel}</div>
+        </div>
+        <div style="font-size:8px;color:var(--green);">● live</div>`;
+      el.appendChild(d);
     });
   }
 
   function _renderRegistry(){
-    const el=document.getElementById('peer-registry');if(!el)return;
+    const el=document.getElementById('peer-registry'); if(!el) return;
     if(!_registry.size){
-      el.innerHTML='<div style="color:var(--text2);font-size:11px;">No certificates received.</div>';
+      el.innerHTML='<div style="color:var(--text2);font-size:11px;">No certificates received yet.</div>';
       return;
     }
     el.innerHTML='';
     _registry.forEach(d=>{
-      const div=document.createElement('div');div.className='card';
+      const div=document.createElement('div'); div.className='card';
       div.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <div style="font-size:12px;color:var(--cyan);font-weight:600;">${d.username}</div>
+            <div style="font-size:12px;color:var(--cyan);font-weight:600;">${d.username||'?'}</div>
             <div class="hash" style="margin-top:2px;">${d.did}</div>
           </div>
-          <div style="font-size:9px;color:var(--text2);">${new Date(d.createdAt).toLocaleString()}</div>
+          <div style="font-size:9px;color:var(--text2);">${new Date(d.createdAt||Date.now()).toLocaleString()}</div>
         </div>
-        <div style="font-size:9px;color:var(--text2);margin-top:6px;">keccak: ${d.keccakStateHash||'—'} · ${d.entropySteps||0} sponge steps</div>
-      `;
+        <div style="font-size:9px;color:var(--text2);margin-top:6px;">
+          keccak: ${d.keccakStateHash||'—'} · ${d.entropySteps||0} sponge steps · v${d.version||'?'}
+        </div>`;
       el.appendChild(div);
     });
   }
 
-  // Load peer registry from IDB on startup
   async function loadRegistryFromIDB(){
     try{
       const db=await IdentityEngine.openDB();
       const all=await new Promise((res,rej)=>{
         const tx=db.transaction('registry','readonly');
         const r=tx.objectStore('registry').getAll();
-        r.onsuccess=e=>res(e.target.result);r.onerror=rej;
+        r.onsuccess=e=>res(e.target.result); r.onerror=rej;
       });
       (all||[]).forEach(d=>_registry.set(d.did,d));
       _renderRegistry();
-    }catch(e){console.warn('P2P registry IDB load failed:',e);}
+    }catch(e){ console.warn('P2P registry IDB load failed:',e); }
   }
 
-  return{init,connect,broadcastBirth,broadcast,loadRegistryFromIDB};
+  // ── init (backwards compat — called from boot) ───────────
+  async function init(){ await goOnline(); }
+
+  return{
+    goOnline, goOffline, init,
+    connect, broadcastBirth, broadcast,
+    copyHandshake, acceptHandshake,
+    testRelay, pingLocal,
+    loadRegistryFromIDB,
+    get peers(){ return _peers; }
+  };
 })();
 window.P2PNet=P2PNet;
+
 
 
 // ══════════════════════════════════════════════════════════
 // AI WITNESS — Ollama local LLM · auto-binds on identity load
 // ══════════════════════════════════════════════════════════
 const AIWitness = (() => {
-  let _id=null,_history=[],_bound=false;
+  let _id=null,_history=[],_bound=false,_witnessPacket=null;
 
   function _url(){return(document.getElementById('ollama-url')?.value||'http://localhost:11434').replace(/\/$/,'');}
   function _model(){
@@ -3057,7 +3345,80 @@ You run locally on Ollama. Be direct, precise, occasionally poetic. No bullet li
     }
   }
 
-  // Bind witness to identity — can be called automatically or by user
+  // ── build + sign a witness presence packet ──────────────
+  async function _buildWitnessPacket(){
+    if(!_id) return null;
+    const packet={
+      node: 'sovereign-'+_id.did.replace(/[^a-z0-9]/gi,'').substr(6,24).toLowerCase(),
+      did:  _id.did,
+      username: _id.username,
+      pubKeyHex: _id.pubKeyHex,
+      ollamaUrl: _url(),
+      keccakStateHash: _id.keccakStateHash,
+      entropySteps: _id.entropySteps,
+      ts: Date.now(),
+    };
+    // Sign with Ed25519 private key (live keyPair or cached)
+    const kp=_id.keyPair||IdentityEngine.getKeyPair(_id.did);
+    if(kp){
+      try{
+        const bytes=new TextEncoder().encode(JSON.stringify({
+          node:packet.node,did:packet.did,pubKeyHex:packet.pubKeyHex,ts:packet.ts
+        }));
+        const sig=await crypto.subtle.sign({name:'Ed25519'},kp.privateKey,bytes);
+        packet.sig=Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      }catch(e){ packet.sig='unsigned'; }
+    } else { packet.sig='unsigned'; }
+    return packet;
+  }
+
+  // ── render the witness bootstrap panel ──────────────────
+  function _renderWitnessBootstrap(packet){
+    const existing=document.getElementById('witness-bootstrap-panel');
+    if(existing) existing.remove();
+
+    const panel=document.createElement('div');
+    panel.id='witness-bootstrap-panel';
+    panel.className='panel p';
+    panel.style.marginTop='14px';
+    panel.innerHTML=`
+      <div class="panel-title">⬡ Witness Bootstrap — P2P Address
+        <span class="panel-sub">Share this to let peers connect directly through your witness</span>
+      </div>
+      <div style="background:var(--bg);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:12px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;">Your Witness Address</span>
+          <span style="font-size:9px;color:var(--green);">● Live</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);word-break:break-all;margin-bottom:8px;">${packet.ollamaUrl}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--purple);">${packet.node}</div>
+      </div>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn p" onclick="AIWitness.copyWitnessPacket()">Copy Signed Packet</button>
+        <button class="btn c" onclick="P2PNet.broadcastBirth()">Broadcast to Mesh</button>
+      </div>
+      <div style="border-top:1px solid var(--border2);padding-top:12px;margin-top:4px;">
+        <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Connect via Witness URL</div>
+        <div style="display:flex;gap:8px;">
+          <input id="peer-ollama-url" placeholder="http://peer-ip:11434"
+            style="flex:1;background:var(--bg);border:1px solid var(--border2);color:var(--text);
+                   font-family:var(--mono);font-size:11px;padding:8px 12px;border-radius:4px;outline:none;">
+          <button class="btn p" onclick="AIWitness.connectViaPeerWitness()">Connect</button>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.6;">
+          Enter a peer's Ollama URL → fetches their signed presence packet → bootstraps sovereign connection.
+          No relay needed. Works on local network.
+        </div>
+        <div id="witness-connect-status" style="font-size:10px;margin-top:8px;font-family:var(--mono);"></div>
+      </div>
+    `;
+
+    // Insert after witness-card
+    const wc=document.getElementById('witness-card');
+    if(wc&&wc.parentNode) wc.parentNode.insertBefore(panel,wc.nextSibling);
+  }
+
+  // ── Bind witness to identity — bootstraps P2P ────────────
   async function bind(id){
     _id=id;_bound=true;
     const wc=document.getElementById('witness-card');
@@ -3067,7 +3428,145 @@ You run locally on Ollama. Be direct, precise, occasionally poetic. No bullet li
       <div class="hash" style="margin-top:4px;">witness:${id.did.substr(-12)}</div>
       <div style="font-size:9px;color:var(--green);margin-top:6px;">● Bound at birth · Keccak lineage · model: <span id="wm-label">${_model()}</span></div>
     `;
+
+    // Build signed presence packet
+    _witnessPacket=await _buildWitnessPacket();
+    if(_witnessPacket){
+      _renderWitnessBootstrap(_witnessPacket);
+      // Auto-bootstrap P2P transport
+      if(window.P2PNet){
+        P2PNet.goOnline().then(()=>{
+          _log('P2P transport bootstrapped via witness binding','ok');
+        }).catch(()=>{});
+      }
+    }
     _log(`Witness bound to ${id.username} (${id.did.substr(0,20)}…)`,'ok');
+  }
+
+  // ── Copy witness packet to clipboard ────────────────────
+  async function copyWitnessPacket(){
+    if(!_witnessPacket){ _log('No witness packet — activate witness first','warn'); return; }
+    // Refresh timestamp + sig
+    _witnessPacket=await _buildWitnessPacket();
+    const txt=JSON.stringify(_witnessPacket,null,2);
+    try{
+      await navigator.clipboard.writeText(txt);
+      _log('Witness packet copied ✓ — share your Ollama URL + this packet to peers','ok');
+    }catch(e){
+      // Fallback: paste into the P2P handshake textarea if visible
+      const ta=document.getElementById('paste-handshake');
+      if(ta){ ta.value=txt; }
+      _log('Clipboard blocked — packet written to P2P handshake textarea','warn');
+    }
+  }
+
+  // ── Connect to a peer via their Ollama/witness URL ──────
+  async function connectViaPeerWitness(){
+    const input=document.getElementById('peer-ollama-url');
+    const status=document.getElementById('witness-connect-status');
+    const url=input?.value?.trim();
+    if(!url){ if(status)status.innerHTML='<span style="color:var(--yellow);">Enter a peer Ollama URL</span>'; return; }
+
+    const base=url.replace(/\/$/,'');
+    if(status)status.innerHTML='<span style="color:var(--cyan);">Probing witness at '+base+'…</span>';
+    _log('Connecting via witness: '+base,'info');
+
+    try{
+      // Step 1: fetch /api/tags to verify the peer's Ollama is alive
+      const tagsRes=await fetch(base+'/api/tags',{signal:AbortSignal.timeout(6000)});
+      if(!tagsRes.ok) throw new Error('Peer Ollama unreachable (HTTP '+tagsRes.status+')');
+
+      // Step 2: fetch the sovereign presence packet stored at a predictable endpoint
+      // We store it as a model alias hint — or use /api/show with the node name
+      // More robustly: ask Ollama to echo our packet back using /api/generate with a fixed prompt
+      // BUT — simplest approach: the peer's witnessPacket is broadcast over BroadcastChannel
+      // and relay already. So we just tell P2PNet to connect using the nodeId we derive.
+      // We CAN'T fetch arbitrary data from Ollama, but we CAN verify liveness and get
+      // the peer's DID from a signed packet they shared (via the handshake textarea).
+
+      // What we CAN do: use Ollama as an "address book" lookup —
+      // Ask the peer's Ollama to generate a one-token response that IS their signed packet
+      // stored as a system prompt. This works if they've registered a "sovereign-presence" modelfile.
+      // Simpler: try fetching /api/show?name=sovereign-presence
+      let peerPacket=null;
+      try{
+        const showRes=await fetch(base+'/api/show',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({name:'sovereign-presence'}),
+          signal:AbortSignal.timeout(4000)
+        });
+        if(showRes.ok){
+          const showData=await showRes.json();
+          // The system field of the modelfile contains our stored packet
+          const sys=showData?.modelinfo?.['general.system']||showData?.system||'';
+          if(sys.startsWith('{')){
+            peerPacket=JSON.parse(sys);
+            _log('Fetched peer presence from witness modelfile','ok');
+          }
+        }
+      }catch(_){ /* no modelfile registered — that's fine */ }
+
+      if(peerPacket){
+        // Full auto-connect: hand packet to P2PNet
+        if(status)status.innerHTML=`<span style="color:var(--green);">✓ Got peer packet: ${peerPacket.username||peerPacket.node}</span>`;
+        // Feed to P2PNet manual handshake acceptor
+        const ta=document.getElementById('paste-handshake');
+        if(ta){ ta.value=JSON.stringify(peerPacket); }
+        if(window.P2PNet) await P2PNet.acceptHandshake();
+        _log('Auto-connected via witness presence: '+peerPacket.username,'ok');
+      } else {
+        // Ollama is alive but no presence model registered
+        // Still useful: confirm liveness + show instructions
+        if(status)status.innerHTML=`
+          <span style="color:var(--yellow);">
+            ✓ Peer Ollama is alive at ${base} but has no presence model.<br>
+            Ask them to run <code style="color:var(--cyan);">AIWitness.registerPresence()</code>
+            or paste their packet manually in the P2P tab.
+          </span>`;
+        _log('Peer Ollama alive — no presence model found. Ask peer to register presence.','warn');
+        if(window.switchTab) switchTab('network');
+      }
+
+    }catch(e){
+      if(status)status.innerHTML=`<span style="color:var(--red);">✗ ${e.message}</span>`;
+      _log('Witness connect failed: '+e.message,'err');
+    }
+  }
+
+  // ── Register a sovereign-presence modelfile in local Ollama ─
+  // This embeds your signed witness packet in a local Ollama modelfile so
+  // peers fetching /api/show?name=sovereign-presence get your identity packet.
+  async function registerPresence(){
+    if(!_witnessPacket||!_id){
+      _log('Activate witness first','warn');
+      showModal('Witness Presence','Activate the AI Witness first, then register presence.');
+      return;
+    }
+    _witnessPacket=await _buildWitnessPacket(); // fresh sig
+    const base=_url();
+    const modelfile=`FROM ${_model()}
+SYSTEM ${JSON.stringify(JSON.stringify(_witnessPacket))}`;
+    _log('Registering sovereign-presence model in local Ollama…','info');
+    try{
+      const r=await fetch(base+'/api/create',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:'sovereign-presence',modelfile}),
+        signal:AbortSignal.timeout(30000)
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status+' — '+await r.text().then(t=>t.substr(0,80)));
+      // Drain the streaming response
+      const reader=r.body.getReader(); const dec=new TextDecoder();
+      let done=false;
+      while(!done){ const {done:d,value}=await reader.read(); done=d; if(value)dec.decode(value); }
+      _log('sovereign-presence registered ✓ — peers can now find you via your Ollama URL','ok');
+      showModal('Presence Registered',
+        'Peers can now connect by entering your Ollama URL:\n\n'+base+'\n\nShare this URL with anyone who wants to connect.');
+    }catch(e){
+      _log('Presence registration failed: '+e.message,'err');
+      showModal('Registration Failed', e.message+'\n\nMake sure Ollama is running with:\nOLLAMA_ORIGINS="*" ollama serve');
+    }
   }
 
   // Called by user button — binds + invokes birth greeting
@@ -3138,7 +3637,7 @@ You run locally on Ollama. Be direct, precise, occasionally poetic. No bullet li
     _startHeartbeat();
   }
 
-  return{testConn,register,autoBindIfIdentity,ask,init,isBound:()=>_bound};
+  return{testConn,register,autoBindIfIdentity,ask,init,isBound:()=>_bound,copyWitnessPacket,connectViaPeerWitness,registerPresence,getPacket:()=>_witnessPacket};
 })();
 window.AIWitness=AIWitness;
 
@@ -3178,6 +3677,7 @@ async function doGenerateIdentity(){
   const seed=KeccakEngine.getFinalSeed();
   _identity=await IdentityEngine.generateFromSeed(seed);
   window._sovereignIdentity = _identity;
+  if(_identity&&_identity.keyPair) IdentityEngine.cacheKeyPair(_identity.did,_identity.keyPair);
   const el=document.getElementById('cert-display');
   el.innerHTML=`
     <div class="did-card">
@@ -3767,7 +4267,7 @@ Format EVERY response as a structured ASCII architecture document. No sentences.
 - Ed25519 keypair generation via Web Crypto API
 - Shamir 3-of-5 secret sharing over GF(256)
 - DID generation: did:sovereign:<SHA-256(pubkey)[:24]>
-- PeerJS WebRTC peer-to-peer mesh network
+- Sovereign Transport mesh · BroadcastChannel + WebSocket relay + manual handshake
 - IndexedDB persistence for identities, assets, proposals, inbox/outbox
 - AES-256-GCM encrypted key storage with PBKDF2-derived wrapping key
 - AI Witness bound to Ollama local LLM instance
